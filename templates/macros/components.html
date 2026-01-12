@@ -1,0 +1,164 @@
+{#
+    Edibes Leltár - Újrafelhasználható Jinja2 makrók
+    
+    Használat a template-ekben:
+    {% from "macros/components.html" import movement_badge, product_name, category_badge, empty_state, quantity_display %}
+#}
+
+{# Mozgás típus badge #}
+{% macro movement_badge(movement_type) %}
+{% if movement_type == 'STOCK_IN' %}
+    <span class="badge bg-success">Bevételezés</span>
+{% elif movement_type == 'STOCK_OUT' %}
+    <span class="badge bg-danger">Kivételezés</span>
+{% elif movement_type == 'RETURN' %}
+    <span class="badge bg-info">Visszavétel</span>
+{% elif movement_type == 'ADJUSTMENT' %}
+    <span class="badge bg-warning text-dark">Korrekció</span>
+{% elif movement_type == 'INITIAL' %}
+    <span class="badge bg-secondary">Kezdőkészlet</span>
+{% elif movement_type == 'LOSS' %}
+    <span class="badge bg-dark">Selejt</span>
+{% else %}
+    <span class="badge bg-light text-dark">{{ movement_type }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Termék név kiszerelés és mértékegység megjelenítéssel #}
+{% macro product_name(name, package_size=None, unit_abbr=None, link_url=None) %}
+{% if link_url %}
+<a href="{{ link_url }}">{{ name }}</a>
+{% else %}
+{{ name }}
+{% endif %}
+{% if package_size or unit_abbr %}
+<small class="text-muted">({{ package_size or '' }}{% if package_size and unit_abbr %} {% endif %}{{ unit_abbr or '' }})</small>
+{% endif %}
+{% endmacro %}
+
+{# Kategória badge #}
+{% macro category_badge(category_name) %}
+{% if category_name %}
+<span class="badge bg-primary bg-opacity-10 text-primary">{{ category_name }}</span>
+{% else %}
+<span class="text-muted">-</span>
+{% endif %}
+{% endmacro %}
+
+{# Vonalkód megjelenítés #}
+{% macro barcode_display(barcode) %}
+{% if barcode %}
+<code>{{ barcode }}</code>
+{% else %}
+<span class="text-muted">-</span>
+{% endif %}
+{% endmacro %}
+
+{# Mennyiség változás megjelenítése (+/- színezéssel) #}
+{% macro quantity_change(change, show_unit=True) %}
+<span class="{% if change > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+    {% if change > 0 %}+{% endif %}{{ "%.0f"|format(change) }}
+</span>
+{% if show_unit %}<small class="text-muted">db</small>{% endif %}
+{% endmacro %}
+
+{# Készlet mennyiség megjelenítése #}
+{% macro quantity_display(quantity, min_level=0, show_unit=True, element_id=None, css_class='') %}
+<span class="{{ css_class }} {% if quantity < min_level %}text-warning{% endif %}"{% if element_id %} id="{{ element_id }}"{% endif %}>
+    {{ "%.0f"|format(quantity) }}
+</span>
+{% if show_unit %}<small class="text-muted">db</small>{% endif %}
+{% endmacro %}
+
+{# Üres állapot megjelenítés táblázatban #}
+{% macro empty_state(message='Nincs találat', colspan=6, icon='inbox') %}
+<tr>
+    <td colspan="{{ colspan }}" class="text-center py-5 text-muted">
+        <i class="bi bi-{{ icon }} fs-1 d-block mb-2"></i>
+        {{ message }}
+    </td>
+</tr>
+{% endmacro %}
+
+{# Oldal fejléc (cím + gomb) #}
+{% macro page_header(title, subtitle='', icon='', button_text='', button_url='', button_icon='plus-circle') %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">
+            {% if icon %}<i class="bi bi-{{ icon }} me-2"></i>{% endif %}{{ title }}
+        </h1>
+        {% if subtitle %}<p class="text-muted mb-0">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if button_text and button_url %}
+    <a href="{{ button_url }}" class="btn btn-primary">
+        <i class="bi bi-{{ button_icon }} me-1"></i>{{ button_text }}
+    </a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Szűrő kártya wrapper #}
+{% macro filter_card_start() %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+{% endmacro %}
+
+{% macro filter_card_end() %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Táblázat kártya wrapper #}
+{% macro table_card_start() %}
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+{% endmacro %}
+
+{% macro table_card_end() %}
+        </table>
+    </div>
+</div>
+{% endmacro %}
+
+{# Megerősítő modal (törléshez, stb.) #}
+{% macro confirm_modal(modal_id, title, message, item_name, action_url, action_text='Törlés', action_class='btn-danger', note='') %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body text-start">
+                <p>{{ message }}</p>
+                <p class="fw-bold">{{ item_name }}</p>
+                {% if note %}<p class="text-muted small">{{ note }}</p>{% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
+                <form method="POST" action="{{ action_url }}" class="d-inline">
+                    <button type="submit" class="btn {{ action_class }}">{{ action_text }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Statisztika kártya #}
+{% macro stat_card(title, value, icon, color='primary', warning_condition=False) %}
+<div class="card border-0 shadow-sm h-100 {% if warning_condition %}border-warning{% endif %}">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-{{ color }} bg-opacity-10 p-3 me-3">
+                <i class="bi bi-{{ icon }} text-{{ color }} fs-3"></i>
+            </div>
+            <div>
+                <h6 class="text-muted mb-1">{{ title }}</h6>
+                <h2 class="mb-0 {% if warning_condition %}text-warning{% endif %}">{{ value }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

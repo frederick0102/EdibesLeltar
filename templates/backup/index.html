@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Backup - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Biztonsági mentések',
+        subtitle='Adatbázis mentés és visszaállítás',
+        icon='cloud-download'
+    ) }}
+    
+    <div class="row g-4">
+        <!-- Backup létrehozás -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Új mentés</h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Jelenlegi adatbázis méret:</p>
+                    <h4 class="mb-3">{{ "%.2f"|format(db_size / 1024 / 1024) }} MB</h4>
+                    
+                    <form method="POST" action="{{ url_for('backup.create_backup_now') }}">
+                        {% if network_backup_path %}
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="network_backup" 
+                                   value="true" id="networkBackup" {% if network_available %}checked{% endif %}>
+                            <label class="form-check-label" for="networkBackup">
+                                Hálózati mentés is
+                            </label>
+                            <div class="form-text">
+                                {{ network_backup_path }}
+                                {% if network_available %}
+                                <span class="text-success"><i class="bi bi-check-circle"></i> Elérhető</span>
+                                {% else %}
+                                <span class="text-danger"><i class="bi bi-x-circle"></i> Nem elérhető</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-download me-1"></i>Mentés készítése
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Beállítások info -->
+            <div class="card border-0 shadow-sm mt-4 bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-info-circle me-1"></i>Információ
+                    </h6>
+                    <ul class="list-unstyled mb-0 small">
+                        <li class="mb-2">
+                            <i class="bi bi-clock me-1"></i>
+                            Megőrzési idő: <strong>{{ retention_days }} nap</strong>
+                        </li>
+                        <li>
+                            <i class="bi bi-folder me-1"></i>
+                            Helyi mappa: <code>backups/</code>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Régi backupok törlése -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('backup.cleanup_backups') }}"
+                          onsubmit="return confirm('Biztosan törli a {{ retention_days }} napnál régebbi mentéseket?')">
+                        <button type="submit" class="btn btn-outline-warning w-100">
+                            <i class="bi bi-trash me-1"></i>Régi mentések törlése
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Helyi backup-ok -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0"><i class="bi bi-hdd me-2"></i>Helyi mentések</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fájlnév</th>
+                                <th>Méret</th>
+                                <th>Létrehozva</th>
+                                <th class="text-end">Műveletek</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in local_backups %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-earmark-zip text-primary me-1"></i>
+                                    <code>{{ backup.filename }}</code>
+                                </td>
+                                <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
+                                <td><small>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('backup.download_backup', filename=backup.filename) }}" 
+                                       class="btn btn-sm btn-outline-primary" title="Letöltés">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-success" 
+                                            title="Visszaállítás" data-bs-toggle="modal"
+                                            data-bs-target="#restoreModal{{ loop.index }}">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            title="Törlés" data-bs-toggle="modal"
+                                            data-bs-target="#deleteModal{{ loop.index }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    
+                                    <!-- Visszaállítás modal -->
+                                    <div class="modal fade" id="restoreModal{{ loop.index }}" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Backup visszaállítása</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body text-start">
+                                                    <div class="alert alert-warning">
+                                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                                        <strong>Figyelem!</strong> A jelenlegi adatok felülírásra kerülnek!
+                                                    </div>
+                                                    <p>Visszaállítandó mentés:</p>
+                                                    <p class="fw-bold">{{ backup.filename }}</p>
+                                                    <p class="text-muted small">
+                                                        A jelenlegi adatbázisról automatikusan backup készül a visszaállítás előtt.
+                                                    </p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
+                                                    <form method="POST" action="{{ url_for('backup.restore_backup', filename=backup.filename) }}" class="d-inline">
+                                                        <button type="submit" class="btn btn-success">Visszaállítás</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Törlés modal -->
+                                    <div class="modal fade" id="deleteModal{{ loop.index }}" tabindex="-1">
+                                        <div class="modal-dialog modal-sm">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Törlés</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body text-start">
+                                                    <p>Biztosan törli ezt a mentést?</p>
+                                                    <p class="fw-bold small">{{ backup.filename }}</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
+                                                    <form method="POST" action="{{ url_for('backup.delete_backup', filename=backup.filename) }}" class="d-inline">
+                                                        <button type="submit" class="btn btn-danger">Törlés</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    Nincs mentés
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            {% if network_backup_path and network_backups %}
+            <!-- Hálózati backup-ok -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Hálózati mentések</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fájlnév</th>
+                                <th>Méret</th>
+                                <th>Létrehozva</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in network_backups %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-earmark-zip text-success me-1"></i>
+                                    <code>{{ backup.filename }}</code>
+                                </td>
+                                <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
+                                <td><small>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

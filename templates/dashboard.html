@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import stat_card, movement_badge, product_name, quantity_change, empty_state %}
+
+{% block title %}Főoldal - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Üdvözlő fejléc -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-6">
+                <i class="bi bi-speedometer2 me-2"></i>Készlet Összegző
+            </h1>
+            <p class="text-muted">Aktuális készletállapot és statisztikák</p>
+        </div>
+    </div>
+    
+    <!-- Statisztika kártyák -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            {{ stat_card('Összes termék', stats.total_products, 'box', 'primary') }}
+        </div>
+        
+        <div class="col-md-4">
+            {{ stat_card('Összes készlet', "%.0f"|format(stats.total_quantity), 'boxes', 'success') }}
+        </div>
+        
+        <div class="col-md-4">
+            {{ stat_card('Alacsony készlet', stats.low_stock_count, 'exclamation-triangle', 
+                'warning' if stats.low_stock_count > 0 else 'secondary', 
+                stats.low_stock_count > 0) }}
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- Kategóriánkénti összesítés -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pie-chart me-2"></i>Kategóriánkénti készlet
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Kategória</th>
+                                    <th class="text-center">Termékek</th>
+                                    <th class="text-end">Össz. készlet</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cat in category_stats %}
+                                <tr>
+                                    <td>
+                                        <i class="bi bi-tag me-1 text-muted"></i>
+                                        {{ cat.category_name }}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary">{{ cat.product_count }}</span>
+                                    </td>
+                                    <td class="text-end fw-bold">{{ "%.0f"|format(cat.total_quantity) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">
+                                        Nincs adat
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Alacsony készletű termékek -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-triangle text-warning me-2"></i>Alacsony készletű termékek
+                    </h5>
+                    {% if low_stock_products %}
+                    <a href="{{ url_for('inventory.list_inventory', stock='low') }}" class="btn btn-sm btn-outline-warning">
+                        Összes
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Termék</th>
+                                    <th class="text-end">Jelenlegi</th>
+                                    <th class="text-end">Minimum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in low_stock_products %}
+                                <tr class="{% if product.current_quantity == 0 %}table-danger{% else %}table-warning{% endif %}">
+                                    <td>
+                                        <div>{{ product.product_name }}</div>
+                                        <small class="text-muted">{{ product.category_name or '-' }}</small>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="fw-bold {% if product.current_quantity == 0 %}text-danger{% else %}text-warning{% endif %}">
+                                            {{ "%.0f"|format(product.current_quantity) }}
+                                        </span>
+                                        <small class="text-muted">{{ product.unit or 'db' }}</small>
+                                    </td>
+                                    <td class="text-end text-muted">
+                                        {{ "%.0f"|format(product.min_stock_level) }} {{ product.unit or 'db' }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">
+                                        <i class="bi bi-check-circle text-success fs-1"></i>
+                                        <div class="mt-2">Minden termék megfelelő készleten van</div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Utolsó mozgások -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Utolsó készletmozgások
+                    </h5>
+                    <a href="{{ url_for('inventory.movement_history') }}" class="btn btn-sm btn-outline-primary">
+                        Teljes napló
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Időpont</th>
+                                    <th>Termék</th>
+                                    <th>Típus</th>
+                                    <th class="text-end">Mennyiség</th>
+                                    <th>Megjegyzés</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for move in recent_movements %}
+                                <tr>
+                                    <td>
+                                        <small>{{ move.created_at|default('-', true) }}</small>
+                                    </td>
+                                    <td>
+                                        {{ product_name(move.product_name, move.package_size, move.unit) }}
+                                    </td>
+                                    <td>{{ movement_badge(move.movement_type) }}</td>
+                                    <td class="text-end">
+                                        {{ quantity_change(move.quantity_change) }}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ move.note or '-' }}</small>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                {{ empty_state('Nincs készletmozgás', 5) }}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gyors műveletek -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-lightning me-1"></i>Gyors műveletek
+                    </h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('inventory.add_movement') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-1"></i>Készletmozgás rögzítése
+                        </a>
+                        <a href="{{ url_for('products.add_product') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-box me-1"></i>Új termék
+                        </a>
+                        <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-list-ul me-1"></i>Készlet lista
+                        </a>
+                        <a href="{{ url_for('backup.backup_page') }}" class="btn btn-outline-success">
+                            <i class="bi bi-cloud-download me-1"></i>Backup készítése
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state %}
+
+{% block title %}Mértékegységek - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Mértékegységek',
+        subtitle='Mennyiségi egységek kezelése',
+        icon='rulers'
+    ) }}
+    
+    <div class="row g-4">
+        <!-- Új mértékegység form -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Új mértékegység</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('products.add_unit') }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Név *</label>
+                            <input type="text" class="form-control" id="name" name="name" required
+                                   placeholder="Pl. Kilogramm">
+                        </div>
+                        <div class="mb-3">
+                            <label for="abbreviation" class="form-label">Rövidítés *</label>
+                            <input type="text" class="form-control" id="abbreviation" name="abbreviation" 
+                                   required placeholder="Pl. kg">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-plus me-1"></i>Létrehozás
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mértékegységek lista -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Meglévő mértékegységek</h6>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showDeletedSwitch"
+                               {% if show_deleted %}checked{% endif %}
+                               onchange="window.location.href='?show_deleted=' + (this.checked ? 'true' : 'false')">
+                        <label class="form-check-label" for="showDeletedSwitch">Töröltek</label>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Név</th>
+                                <th>Rövidítés</th>
+                                <th class="text-end">Művelet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for unit in units %}
+                            <tr class="{% if unit.is_deleted %}table-secondary{% endif %}">
+                                <td>
+                                    {% if unit.is_deleted %}<i class="bi bi-trash text-danger me-1"></i>{% endif %}
+                                    <strong>{{ unit.name }}</strong>
+                                </td>
+                                <td><code>{{ unit.abbreviation }}</code></td>
+                                <td class="text-end">
+                                    {% if not unit.is_deleted %}
+                                    <form method="POST" action="{{ url_for('products.delete_unit', unit_id=unit.id) }}" 
+                                          class="d-inline" onsubmit="return confirm('Biztosan törli a mértékegységet?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            {{ empty_state('Nincs mértékegység', 3) }}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

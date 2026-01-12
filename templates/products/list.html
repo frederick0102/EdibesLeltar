@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, category_badge, barcode_display, empty_state, confirm_modal %}
+
+{% block title %}Termékek - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Termékek',
+        subtitle='Termék törzsadatok kezelése',
+        icon='box',
+        button_text='Új termék',
+        button_url=url_for('products.add_product')
+    ) }}
+    
+    <!-- Szűrők -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" name="search" 
+                               placeholder="Keresés név, vonalkód alapján..." 
+                               value="{{ search }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" name="category">
+                        <option value="">Összes kategória</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if selected_category == cat.id|string %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="show_deleted" 
+                               value="true" id="showDeleted" {% if show_deleted %}checked{% endif %}>
+                        <label class="form-check-label" for="showDeleted">Töröltek mutatása</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="bi bi-funnel me-1"></i>Szűrés
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Termékek lista -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Termék neve</th>
+                        <th>Kategória</th>
+                        <th>Kiszerelés</th>
+                        <th>Vonalkód</th>
+                        <th class="text-center">Készlet</th>
+                        <th class="text-center">Min. szint</th>
+                        <th class="text-end">Műveletek</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr class="{% if product.is_deleted %}table-secondary text-muted{% elif product.current_quantity < product.min_stock_level %}table-warning{% endif %}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if product.is_deleted %}
+                                <i class="bi bi-trash text-danger me-2"></i>
+                                {% endif %}
+                                <div>
+                                    <strong>{{ product.name }}</strong>
+                                    {% if product.description %}
+                                    <br><small class="text-muted">{{ product.description[:50] }}{% if product.description|length > 50 %}...{% endif %}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {{ category_badge(product.category_name) }}
+                        </td>
+                        <td>
+                            {% if product.package_size %}
+                            <span class="fw-medium">{{ product.package_size }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ barcode_display(product.barcode) }}
+                        </td>
+                        <td class="text-center">
+                            <span class="fw-bold {% if product.current_quantity < product.min_stock_level %}text-warning{% endif %}">
+                                {{ "%.0f"|format(product.current_quantity) }}
+                            </span>
+                            <small class="text-muted">db</small>
+                        </td>
+                        <td class="text-center">
+                            {{ "%.0f"|format(product.min_stock_level) }}
+                            <small class="text-muted">db</small>
+                        </td>
+                        <td class="text-end">
+                            {% if product.is_deleted %}
+                            <form method="POST" action="{{ url_for('products.restore_product', product_id=product.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-success" title="Visszaállítás">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <a href="{{ url_for('products.edit_product', product_id=product.id) }}" 
+                               class="btn btn-sm btn-outline-primary" title="Szerkesztés">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                    title="Törlés" data-bs-toggle="modal" 
+                                    data-bs-target="#deleteModal{{ product.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    {{ empty_state('Nincs találat', 7) }}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="mt-3 text-muted">
+        <small>Összesen: {{ products|length }} termék</small>
+    </div>
+    
+    <!-- Törlés modalok -->
+    {% for product in products %}
+    {% if not product.is_deleted %}
+    {{ confirm_modal(
+        'deleteModal' ~ product.id,
+        'Termék törlése',
+        'Biztosan törölni szeretné a következő terméket?',
+        product.name,
+        url_for('products.delete_product', product_id=product.id),
+        'Törlés',
+        'btn-danger',
+        'A termék csak "törölt" állapotba kerül, később visszaállítható.'
+    ) }}
+    {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}

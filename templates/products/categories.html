@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state %}
+
+{% block title %}Kategóriák - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Kategóriák',
+        subtitle='Termékkategóriák kezelése',
+        icon='tags'
+    ) }}
+    
+    <div class="row g-4">
+        <!-- Új kategória form -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Új kategória</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('products.add_category') }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Kategória neve *</label>
+                            <input type="text" class="form-control" id="name" name="name" required
+                                   placeholder="Pl. Üdítők">
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Leírás</label>
+                            <textarea class="form-control" id="description" name="description" 
+                                      rows="2" placeholder="Rövid leírás..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-plus me-1"></i>Létrehozás
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Kategóriák lista -->
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Meglévő kategóriák</h6>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showDeletedSwitch"
+                               {% if show_deleted %}checked{% endif %}
+                               onchange="window.location.href='?show_deleted=' + (this.checked ? 'true' : 'false')">
+                        <label class="form-check-label" for="showDeletedSwitch">Töröltek</label>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Név</th>
+                                <th>Leírás</th>
+                                <th class="text-end">Művelet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat in categories %}
+                            <tr class="{% if cat.is_deleted %}table-secondary{% endif %}">
+                                <td>
+                                    {% if cat.is_deleted %}<i class="bi bi-trash text-danger me-1"></i>{% endif %}
+                                    <strong>{{ cat.name }}</strong>
+                                </td>
+                                <td class="text-muted">{{ cat.description or '-' }}</td>
+                                <td class="text-end">
+                                    {% if not cat.is_deleted %}
+                                    <form method="POST" action="{{ url_for('products.delete_category', category_id=cat.id) }}" 
+                                          class="d-inline" onsubmit="return confirm('Biztosan törli a kategóriát?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            {{ empty_state('Nincs kategória', 3) }}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

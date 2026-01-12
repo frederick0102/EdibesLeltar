@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('products.list_products') }}" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="h3 mb-0">{{ title }}</h1>
+                    <p class="text-muted mb-0">Töltse ki a termék adatait</p>
+                </div>
+            </div>
+            
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <form method="POST">
+                        <div class="row g-3">
+                            <!-- Termék neve -->
+                            <div class="col-12">
+                                <label for="name" class="form-label">
+                                    Termék neve <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control form-control-lg" 
+                                       id="name" name="name" required
+                                       value="{{ product.name if product else '' }}"
+                                       placeholder="Pl. Coca Cola 0.5L">
+                            </div>
+                            
+                            <!-- Kategória és Mértékegység -->
+                            <div class="col-md-6">
+                                <label for="category_id" class="form-label">Kategória</label>
+                                <select class="form-select" id="category_id" name="category_id">
+                                    <option value="">-- Válasszon kategóriát --</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.id }}" 
+                                            {% if product and product.category_id == cat.id %}selected{% endif %}>
+                                        {{ cat.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="unit_id" class="form-label">Mértékegység</label>
+                                <select class="form-select" id="unit_id" name="unit_id">
+                                    <option value="">-- Válasszon mértékegységet --</option>
+                                    {% for unit in units %}
+                                    <option value="{{ unit.id }}"
+                                            {% if product and product.unit_id == unit.id %}selected{% endif %}>
+                                        {{ unit.name }} ({{ unit.abbreviation }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Vonalkód -->
+                            <div class="col-md-6">
+                                <label for="barcode" class="form-label">
+                                    <i class="bi bi-upc me-1"></i>Vonalkód
+                                </label>
+                                <input type="text" class="form-control" 
+                                       id="barcode" name="barcode"
+                                       value="{{ product.barcode if product else '' }}"
+                                       placeholder="Vonalkód (opcionális)">
+                                <div class="form-text">Későbbi vonalkód olvasáshoz</div>
+                            </div>
+                            
+                            <!-- Kiszerelés / Mennyiség -->
+                            <div class="col-md-6">
+                                <label for="package_size" class="form-label">
+                                    <i class="bi bi-box me-1"></i>Kiszerelés
+                                </label>
+                                <input type="text" class="form-control" 
+                                       id="package_size" name="package_size"
+                                       value="{{ product.package_size if product else '' }}"
+                                       placeholder="Pl. 0.5L, 100g, 6x0.33L">
+                                <div class="form-text">Termék mennyisége/mérete</div>
+                            </div>
+                            
+                            <!-- Minimum készlet szint -->
+                            <div class="col-md-6">
+                                <label for="min_stock_level" class="form-label">Minimum készlet szint</label>
+                                <input type="number" class="form-control" 
+                                       id="min_stock_level" name="min_stock_level"
+                                       value="{{ product.min_stock_level if product else 0 }}"
+                                       min="0" step="1">
+                                <div class="form-text">Riasztás, ha ez alá csökken</div>
+                            </div>
+                            
+                            {% if not product %}
+                            <!-- Kezdő készlet (csak új terméknél) -->
+                            <div class="col-md-6">
+                                <label for="initial_quantity" class="form-label">
+                                    <i class="bi bi-box-seam me-1"></i>Kezdő készlet
+                                </label>
+                                <input type="number" class="form-control" 
+                                       id="initial_quantity" name="initial_quantity"
+                                       value="0" min="0" step="1">
+                                <div class="form-text">Opcionális kezdő mennyiség</div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Leírás -->
+                            <div class="col-12">
+                                <label for="description" class="form-label">Leírás</label>
+                                <textarea class="form-control" id="description" name="description"
+                                          rows="3" placeholder="Rövid leírás a termékről...">{{ product.description if product else '' }}</textarea>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('products.list_products') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x me-1"></i>Mégse
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-lg me-1"></i>
+                                {% if product %}Mentés{% else %}Létrehozás{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            {% if product %}
+            <!-- Jelenlegi készlet megjelenítése szerkesztésnél -->
+            <div class="card border-0 shadow-sm mt-4 bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Jelenlegi készlet</h6>
+                            <h3 class="mb-0">{{ "%.0f"|format(product.current_quantity or 0) }}</h3>
+                        </div>
+                        <a href="{{ url_for('inventory.add_movement') }}?product={{ product.id }}" 
+                           class="btn btn-primary">
+                            <i class="bi bi-plus-minus me-1"></i>Készletmozgás
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

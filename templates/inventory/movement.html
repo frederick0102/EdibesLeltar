@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block title %}Készletmozgás - Edibes Leltár{% endblock %}
+
+{% block extra_css %}
+<style>
+    #barcode-scanner-container {
+        display: none;
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    #barcode-scanner-container.active {
+        display: block;
+    }
+    #reader {
+        width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    #reader video {
+        border-radius: 12px;
+    }
+    .scanner-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80%;
+        height: 100px;
+        border: 3px solid #667eea;
+        border-radius: 8px;
+        pointer-events: none;
+        z-index: 10;
+    }
+    .scan-result {
+        animation: pulse 0.5s ease;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-plus-minus me-2"></i>Készletmozgás rögzítése
+                    </h1>
+                    <p class="text-muted mb-0">Bevételezés, kivételezés, korrekció</p>
+                </div>
+            </div>
+            
+            <!-- Vonalkód keresés -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <form id="barcodeForm" class="row g-2 mb-3">
+                        <div class="col">
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                                <input type="text" class="form-control" id="barcodeInput" 
+                                       placeholder="Vonalkód beolvasása..." value="{{ barcode }}"
+                                       autofocus>
+                                <button type="button" class="btn btn-success" id="startScannerBtn" title="Kamera indítása">
+                                    <i class="bi bi-camera"></i>
+                                </button>
+                                <button type="submit" class="btn btn-primary">Keresés</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Kamera vonalkód olvasó -->
+                    <div id="barcode-scanner-container">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted"><i class="bi bi-camera-video me-1"></i>Vonalkód szkennelés</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="stopScannerBtn">
+                                <i class="bi bi-x-lg me-1"></i>Bezárás
+                            </button>
+                        </div>
+                        <div id="reader"></div>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">Tartsa a vonalkódot a kamera elé</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mozgás form -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <form method="POST">
+                        <div class="row g-3">
+                            <!-- Termék kiválasztása -->
+                            <div class="col-12">
+                                <label for="product_id" class="form-label">
+                                    Termék <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select form-select-lg" id="product_id" name="product_id" required>
+                                    <option value="">-- Válasszon terméket --</option>
+                                    {% for product in products %}
+                                    <option value="{{ product.id }}" 
+                                            data-quantity="{{ product.current_quantity }}"
+                                            data-unit="db"
+                                            {% if selected_product_id and selected_product_id == product.id %}selected{% endif %}>
+                                        {{ product.name }}{% if product.package_size or product.unit_abbr %} ({{ product.package_size or '' }}{% if product.package_size and product.unit_abbr %} {% endif %}{{ product.unit_abbr or '' }}){% endif %}
+                                        {% if product.barcode %} [{{ product.barcode }}]{% endif %}
+                                        - Készlet: {{ "%.0f"|format(product.current_quantity) }} db
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Jelenlegi készlet megjelenítése -->
+                            <div class="col-12" id="currentStockInfo" style="display: none;">
+                                <div class="alert alert-info mb-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Jelenlegi készlet:</span>
+                                        <span class="fs-4 fw-bold" id="currentStockDisplay">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Mozgás típusa -->
+                            <div class="col-md-6">
+                                <label for="movement_type" class="form-label">
+                                    Mozgás típusa <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" id="movement_type" name="movement_type" required>
+                                    {% for type_code, type_name in movement_types %}
+                                    <option value="{{ type_code }}">{{ type_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Mennyiség -->
+                            <div class="col-md-6">
+                                <label for="quantity" class="form-label">
+                                    Mennyiség <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="adjustQuantity(-1)">
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                    <input type="number" class="form-control text-center" 
+                                           id="quantity" name="quantity" 
+                                           value="1" min="1" step="1" required>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="adjustQuantity(1)">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Gyors mennyiség gombok -->
+                            <div class="col-12">
+                                <div class="btn-group w-100">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(1)">1</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(5)">5</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(10)">10</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(20)">20</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(50)">50</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="setQuantity(100)">100</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Megjegyzés -->
+                            <div class="col-12">
+                                <label for="note" class="form-label">Megjegyzés</label>
+                                <input type="text" class="form-control" id="note" name="note"
+                                       placeholder="Opcionális megjegyzés...">
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x me-1"></i>Mégse
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-lg me-1"></i>Rögzítés
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- HTML5 QRCode Library -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+let html5QrCode = null;
+let isScanning = false;
+
+// Termék választáskor készlet megjelenítése
+document.getElementById('product_id').addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    const info = document.getElementById('currentStockInfo');
+    const display = document.getElementById('currentStockDisplay');
+    
+    if (!info || !display) {
+        console.warn('Készlet kijelző elemek nem találhatók');
+        return;
+    }
+    
+    if (this.value) {
+        const qty = selected.dataset.quantity || 0;
+        const unit = selected.dataset.unit || 'db';
+        display.textContent = `${Math.round(qty)} ${unit}`;
+        info.style.display = 'block';
+    } else {
+        info.style.display = 'none';
+    }
+});
+
+// Mennyiség módosítása
+function adjustQuantity(delta) {
+    const input = document.getElementById('quantity');
+    let value = parseFloat(input.value) || 0;
+    value = Math.max(0, value + delta);
+    input.value = value;
+}
+
+function setQuantity(value) {
+    document.getElementById('quantity').value = value;
+}
+
+// Vonalkód keresés függvény
+function searchBarcode(barcode) {
+    const select = document.getElementById('product_id');
+    let found = false;
+    
+    for (let option of select.options) {
+        if (option.text.includes(`[${barcode}]`)) {
+            select.value = option.value;
+            select.dispatchEvent(new Event('change'));
+            found = true;
+            
+            // Vizuális visszajelzés
+            select.classList.add('scan-result');
+            setTimeout(() => select.classList.remove('scan-result'), 500);
+            break;
+        }
+    }
+    
+    if (!found) {
+        alert('Termék nem található ezzel a vonalkóddal: ' + barcode);
+    }
+    
+    return found;
+}
+
+// Vonalkód keresés form
+document.getElementById('barcodeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const barcode = document.getElementById('barcodeInput').value.trim();
+    if (barcode) {
+        searchBarcode(barcode);
+    }
+});
+
+// Kamera indítása
+document.getElementById('startScannerBtn').addEventListener('click', async function() {
+    const container = document.getElementById('barcode-scanner-container');
+    
+    if (isScanning) {
+        return;
+    }
+    
+    // Ellenőrizzük, hogy van-e egyáltalán kamera
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(d => d.kind === 'videoinput');
+        
+        if (cameras.length === 0) {
+            alert('Nem található kamera az eszközön!\n\nHasználja a vonalkód beviteli mezőt kézi beíráshoz vagy külső vonalkód olvasóval.');
+            return;
+        }
+        
+        console.log('Elérhető kamerák:', cameras);
+    } catch (e) {
+        console.log('Eszköz lekérdezési hiba:', e);
+    }
+    
+    container.classList.add('active');
+    
+    html5QrCode = new Html5Qrcode("reader");
+    
+    const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 100 },
+        aspectRatio: 1.777,
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.QR_CODE
+        ]
+    };
+    
+    const onScanSuccess = (decodedText, decodedResult) => {
+        console.log('Vonalkód beolvasva:', decodedText);
+        document.getElementById('barcodeInput').value = decodedText;
+        
+        // Keresés és kamera leállítása
+        if (searchBarcode(decodedText)) {
+            stopScanner();
+        }
+    };
+    
+    const onScanError = (errorMessage) => {
+        // Hibák figyelmen kívül hagyása (folyamatos szkennelés)
+    };
+    
+    // Próbáljuk először a hátsó kamerát, ha nem sikerül, akkor bármelyiket
+    try {
+        await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+        isScanning = true;
+    } catch (err1) {
+        console.log('Hátsó kamera nem elérhető, próbálom az elsőt:', err1);
+        try {
+            await html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanError);
+            isScanning = true;
+        } catch (err2) {
+            console.log('Elülső kamera sem elérhető, próbálom bármelyiket:', err2);
+            try {
+                // Utolsó próba: bármelyik elérhető kamera
+                const devices = await Html5Qrcode.getCameras();
+                if (devices && devices.length > 0) {
+                    await html5QrCode.start(devices[0].id, config, onScanSuccess, onScanError);
+                    isScanning = true;
+                } else {
+                    throw new Error('Nincs elérhető kamera');
+                }
+            } catch (err3) {
+                console.error('Végső kamera hiba:', err3);
+                container.classList.remove('active');
+                
+                let errorMsg = 'Nem sikerült a kamerát elindítani.\n\n';
+                if (err3.name === 'NotAllowedError') {
+                    errorMsg += 'A kamera hozzáférés meg lett tagadva.\nEngedélyezze a böngésző beállításaiban!';
+                } else if (err3.name === 'NotFoundError') {
+                    errorMsg += 'Nem található kamera az eszközön.';
+                } else if (err3.name === 'NotReadableError') {
+                    errorMsg += 'A kamera már használatban van egy másik alkalmazás által.';
+                } else {
+                    errorMsg += 'Használja a vonalkód beviteli mezőt kézi beíráshoz.';
+                }
+                alert(errorMsg);
+            }
+        }
+    }
+});
+
+// Kamera leállítása
+function stopScanner() {
+    if (html5QrCode && isScanning) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            isScanning = false;
+            document.getElementById('barcode-scanner-container').classList.remove('active');
+        }).catch((err) => {
+            console.error('Leállítási hiba:', err);
+        });
+    }
+}
+
+document.getElementById('stopScannerBtn').addEventListener('click', stopScanner);
+
+// Kezdeti állapot beállítása ha van kiválasztott termék
+if (document.getElementById('product_id').value) {
+    document.getElementById('product_id').dispatchEvent(new Event('change'));
+}
+
+// Oldal elhagyásakor kamera leállítása
+window.addEventListener('beforeunload', stopScanner);
+</script>
+{% endblock %}
