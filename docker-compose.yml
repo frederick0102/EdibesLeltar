@@ -6,8 +6,8 @@ services:
     build: .
     container_name: edibes-leltar
     restart: unless-stopped
-    ports:
-      - "5000:5000"
+    expose:
+      - "5000"
     volumes:
       # Adatbázis megőrzése a host-on
       - ./data:/app/data
@@ -23,3 +23,16 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: edibes-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - edibes-leltar
