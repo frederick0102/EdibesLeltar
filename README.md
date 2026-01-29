@@ -1,167 +1,247 @@
-# Edibles Leltár
+<p align="center">
+  <h1 align="center">Edibles Inventory</h1>
+  <p align="center">
+    <strong>Vending Machine Inventory Management System</strong>
+  </p>
+</p>
 
-Automata feltöltő készletkezelő rendszer - üdítő, szendvics, csoki és egyéb termékeket kiszolgáló automaták leltárkezelésére.
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="#"><img src="https://img.shields.io/badge/flask-2.x-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask"></a>
+  <a href="#"><img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="#"><img src="https://img.shields.io/badge/platform-Raspberry%20Pi-C51A4A?style=flat-square&logo=raspberrypi&logoColor=white" alt="Raspberry Pi"></a>
+  <a href="#"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
+</p>
 
-## 🚀 Új: Multi-Location Supply Chain
+<p align="center">
+  <a href="#installation">Installation</a> |
+  <a href="#docker-deployment">Docker</a> |
+  <a href="#features">Features</a> |
+  <a href="#api">API</a>
+</p>
 
-A rendszer támogatja a több helyszínes készletkezelést a teljes ellátási lánc mentén:
+---
+
+## Overview
+
+Inventory management system optimized for vending machines serving beverages, sandwiches, snacks, and other products.
+
+### Multi-Location Supply Chain
+
+The system supports multi-location inventory management across the entire supply chain:
 
 ```
-[Beszállító] ──BESZERZÉS──► [Raktár] ──FELTÖLTÉS──► [Autó] ──FOGYASZTÁS──► [Automata]
+Supplier ──PURCHASE──> Warehouse ──LOAD──> Vehicle ──CONSUME──> Vending Machine
 ```
 
-### Helyszín típusok
-- **🏭 Raktár (Warehouse):** Központi tárhely, ide érkeznek a beszerzések
-- **🚚 Autó (Car):** Mobil egység, amely a raktárból viszi a termékeket
-- **📦 Automata (Vending):** Végpont, ahová az autóból töltjük fel a készletet
+### Location Types
 
-### Atomi tranzakciók
-Minden áthelyezés egy tranzakcióban történik - a forrásból csökken, a célba növekszik. Nincs "köztes állapot".
+| Type | Description |
+|------|-------------|
+| **Warehouse** | Central storage, receives purchases from suppliers |
+| **Vehicle** | Mobile unit, transports products from warehouse |
+| **Vending** | Endpoint, receives stock from vehicle |
 
-### Kompenzáló tranzakciók
-Hibás mozgás esetén nem törlünk, hanem ellentétes mozgást hozunk létre (audit trail megőrzése).
+### Transactions
 
-## Funkciók
+- **Atomic transactions** - Every transfer occurs in a single transaction. Source decreases, destination increases. No intermediate state.
+- **Compensating transactions** - Erroneous movements are not deleted; instead, a reverse movement is created (audit trail preservation).
 
-### 📦 Készletkezelés
-- **Multi-location készletnyilvántartás** - termék × helyszín
-- Termékek nyilvántartása kategóriákkal és mértékegységekkel
-- **Mobil vonalkód olvasó** (html5-qrcode) - kamerával működik
-- Készletmozgások rögzítése (bevételezés, kivételezés, áthelyezés, korrekció, selejt)
-- Gyors +/- gombok az azonnali készletváltozáshoz
-- Minimum készletszint riasztás helyszínenként
+---
 
-### 🔄 Áthelyezések
-- Raktár → Autó feltöltés
-- Autó → Automata töltés (mobil-optimalizált UI)
-- Gyors vonalkódos áthelyezés
-- Áthelyezés történet és visszavonás
+## Features
 
-### 📊 Összegző felület
-- Áttekintő dashboard a készletállapotról
-- Helyszínenkénti összesítések
-- Kategóriánkénti összesítések
-- Alacsony készletű termékek kiemelése
-- Utolsó mozgások listája
+### Inventory Management
 
-### 📝 Törzsadatok
-- Termékek kezelése (CRUD)
-- Kategóriák kezelése
-- Mértékegységek kezelése
-- **Helyszínek kezelése** (raktár, autó, automata)
-- Soft delete - törölt elemek visszaállíthatók
+- Multi-location inventory tracking (product x location)
+- Product catalog with categories and units of measurement
+- Mobile barcode scanner (html5-qrcode) - camera-based
+- Stock movement recording (receipt, issue, transfer, adjustment, scrap)
+- Quick +/- buttons for instant stock changes
+- Minimum stock level alerts per location
 
-### 🔒 Biztonság
-- Hash-elt jelszó (PBKDF2-SHA256)
-- Session alapú autentikáció
-- Helyi hálózaton működik (VPN támogatás)
+### Transfers
 
-### 💾 Adatbiztonság
-- SQLite adatbázis **WAL móddal** (biztonságos SD kártyán)
-- Minden változás naplózása (audit log)
-- **Kompenzáló tranzakciók** (soha nem törlünk)
-- Manuális és automatikus backup
-- Hálózati mentési lehetőség
+- Warehouse to Vehicle loading
+- Vehicle to Vending machine restocking (mobile-optimized UI)
+- Quick barcode-based transfers
+- Transfer history and reversal
 
-## Telepítés
+### Dashboard
 
-### Előfeltételek
+- Overview dashboard of inventory status
+- Per-location summaries
+- Per-category summaries
+- Low stock product highlighting
+- Recent movements list
+
+### Master Data
+
+- Product management (CRUD)
+- Category management
+- Unit of measurement management
+- Location management (warehouse, vehicle, vending)
+- Soft delete - deleted items can be restored
+
+### Security
+
+- Hashed password (PBKDF2-SHA256)
+- Session-based authentication
+- Operates on local network (VPN support)
+
+### Data Safety
+
+- SQLite database with WAL mode (safe for SD cards)
+- All changes logged (audit log)
+- Compensating transactions (never delete)
+- Manual and automatic backup
+- Network backup capability
+
+---
+
+## Installation
+
+### Prerequisites
 
 - Python 3.9+
 - pip
 
-### Telepítési lépések
+### Steps
 
-1. **Klónozza a repót vagy másolja a fájlokat:**
 ```bash
+# 1. Clone repository
 git clone <repo-url>
 cd EdibesLeltar
-```
 
-2. **Virtuális környezet létrehozása (ajánlott):**
-```bash
+# 2. Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# vagy Windows-on:
-venv\Scripts\activate
-```
+# venv\Scripts\activate   # Windows
 
-3. **Függőségek telepítése:**
-```bash
+# 3. Install dependencies
 pip install -r requirements.txt
-```
 
-4. **Környezeti változók beállítása (opcionális):**
-```bash
-# Linux/Mac
-export SECRET_KEY="sajat-titkos-kulcs"
-export APP_PASSWORD="sajat-jelszo"
-export NETWORK_BACKUP_PATH="/mnt/backup/leltar"
-
-# Windows
-set SECRET_KEY=sajat-titkos-kulcs
-set APP_PASSWORD=sajat-jelszo
-set NETWORK_BACKUP_PATH=\\server\share\backup
-```
-
-5. **Alkalmazás indítása (fejlesztési mód):**
-```bash
+# 4. Start application
 python run.py
 ```
 
-6. **Böngészőben nyissa meg:**
-```
-http://localhost:5000
-```
+### Environment Variables
 
-### Alapértelmezett bejelentkezési adatok
-
-- **Jelszó:** `leltar2024`
-
-> ⚠️ **Fontos:** Production környezetben változtassa meg a jelszót az `APP_PASSWORD` környezeti változóval!
-
-## Raspberry Pi telepítés
-
-### Raspbian előkészítése
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SECRET_KEY` | Flask session encryption key | Auto-generated |
+| `APP_PASSWORD` | Login password | `leltar2024` |
+| `NETWORK_BACKUP_PATH` | Network backup path | - |
 
 ```bash
-# Frissítések
-sudo apt update && sudo apt upgrade -y
+# Linux/Mac
+export SECRET_KEY="your-secret-key"
+export APP_PASSWORD="your-password"
 
-# Python és pip
+# Windows
+set SECRET_KEY=your-secret-key
+set APP_PASSWORD=your-password
+```
+
+> **Important:** Change the default password in production environments!
+
+---
+
+## Docker Deployment
+
+Docker deployment is simpler and easier to maintain.
+
+### Prerequisites
+
+```bash
+# Install Docker on Raspberry Pi
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Install Docker Compose
+sudo apt install docker-compose-plugin -y
+
+# Add user to docker group
+sudo usermod -aG docker $USER
+# Reboot required
+```
+
+### Quick Setup
+
+```bash
+# Clone repository
+git clone <repo-url>
+cd EdibesLeltar
+
+# Create directories
+mkdir -p data backups
+
+# Set secret key (recommended)
+echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
+
+# Start container
+docker compose up -d --build
+
+# Verify
+docker compose ps
+```
+
+### Access
+
+```
+http://<raspberry-pi-ip>:5000
+```
+
+### Commands
+
+| Action | Command |
+|--------|---------|
+| Logs | `docker compose logs -f` |
+| Restart | `docker compose restart` |
+| Stop | `docker compose down` |
+| Update | `./update.sh` |
+
+### Updates
+
+```bash
+chmod +x update.sh
+./update.sh
+```
+
+The script automatically:
+1. Pulls latest changes from Git
+2. Rebuilds the Docker container
+3. Removes old images
+
+### Data Persistence
+
+The following directories persist on the host:
+
+| Directory | Contents |
+|-----------|----------|
+| `./data/` | SQLite database |
+| `./backups/` | Backup files |
+
+---
+
+## Raspberry Pi Installation (Manual)
+
+### System Preparation
+
+```bash
+sudo apt update && sudo apt upgrade -y
 sudo apt install python3 python3-pip python3-venv -y
 ```
 
-### Alkalmazás telepítése
+### Systemd Service
 
-```bash
-# Alkalmazás mappa
-cd /home/pi
-mkdir edibles-leltar
-cd edibles-leltar
-
-# Fájlok másolása (vagy git clone)
-# ...
-
-# Virtuális környezet
-python3 -m venv venv
-source venv/bin/activate
-
-# Függőségek
-pip install -r requirements.txt
-```
-
-### Systemd szolgáltatás beállítása
-
-1. **Szolgáltatás fájl létrehozása:**
 ```bash
 sudo nano /etc/systemd/system/edibles-leltar.service
 ```
 
-2. **Tartalma:**
 ```ini
 [Unit]
-Description=Edibles Leltár Alkalmazás
+Description=Edibles Inventory Application
 After=network.target
 
 [Service]
@@ -177,177 +257,77 @@ ExecStart=/home/pi/edibles-leltar/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:5
 WantedBy=multi-user.target
 ```
 
-3. **Szolgáltatás engedélyezése és indítása:**
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable edibles-leltar
 sudo systemctl start edibles-leltar
-```
-
-4. **Státusz ellenőrzése:**
-```bash
 sudo systemctl status edibles-leltar
 ```
 
-### Hálózati hozzáférés
-
-Az alkalmazás a `0.0.0.0:5000` címen figyel, így a helyi hálózaton bármely eszközről elérhető:
-
-```
-http://<raspberry-pi-ip>:5000
-```
-
-A Raspberry Pi IP címét a következő paranccsal tudja lekérdezni:
-```bash
-hostname -I
-```
-
-## 🐳 Docker telepítés (ajánlott Raspberry Pi-re)
-
-A Docker telepítés egyszerűbb és könnyebben karbantartható, mint a manuális telepítés.
-
-### Docker előfeltételek
-
-```bash
-# Docker telepítése Raspberry Pi-re
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Docker Compose telepítése (ha nincs)
-sudo apt install docker-compose-plugin -y
-
-# Felhasználó hozzáadása a docker csoporthoz (újraindítás szükséges)
-sudo usermod -aG docker $USER
-```
-
-### Gyors telepítés Dockerrel
-
-```bash
-# Repository klónozása
-git clone <repo-url>
-cd EdibesLeltar
-
-# Titkos kulcs beállítása (opcionális de ajánlott)
-cp .env.example .env
-nano .env  # SECRET_KEY és APP_PASSWORD módosítása
-
-# Container indítása
-docker compose up -d
-
-# Ellenőrzés
-docker compose ps
-docker compose logs -f
-```
-
-### Elérés
-
-```
-http://<raspberry-pi-ip>:5000
-```
-
-### Docker parancsok
-
-```bash
-# Logok megtekintése
-docker compose logs -f
-
-# Container újraindítása
-docker compose restart
-
-# Container leállítása
-docker compose down
-
-# Container frissítése (új verzió telepítése)
-./update.sh
-```
-
-### Frissítés
-
-A mellékelt `update.sh` script automatikusan frissíti az alkalmazást:
-
-```bash
-chmod +x update.sh
-./update.sh
-```
-
-Ez a script:
-1. Letölti a legújabb változásokat Git-ből
-2. Újraépíti a Docker containert
-3. Törli a régi image-eket (helytakarékosság)
-
-### Docker adatmegőrzés
-
-A következő mappák a host-on maradnak (nem vesznek el container újraépítéskor):
-- `./data/` - SQLite adatbázis
-- `./backups/` - Backup fájlok
+---
 
 ## Backup
 
-### Manuális backup
+### Manual Backup
 
-1. Jelentkezzen be az alkalmazásba
-2. Menjen a **Mentések** menüpontra
-3. Kattintson a **Mentés készítése** gombra
+1. Log in to the application
+2. Navigate to **Backups** menu
+3. Click **Create Backup** button
 
-### Automatikus backup beállítása (cron)
+### Automatic Backup (cron)
 
 ```bash
 crontab -e
 
-# Minden nap éjfélkor backup
+# Every day at midnight
 0 0 * * * /home/pi/edibles-leltar/scripts/backup.sh
 ```
 
-### Hálózati backup
+### Network Backup
 
-Állítsa be a `NETWORK_BACKUP_PATH` környezeti változót:
 ```bash
-export NETWORK_BACKUP_PATH="/mnt/nas/backups/leltar"
+export NETWORK_BACKUP_PATH="/mnt/nas/backups/inventory"
 ```
 
-Győződjön meg róla, hogy a hálózati mappa csatlakoztatva van (pl. `/etc/fstab`-ban).
+---
 
-## Projekt struktúra
+## Project Structure
 
 ```
 EdibesLeltar/
 ├── app/
-│   ├── __init__.py          # Flask alkalmazás factory
-│   ├── config.py             # Konfigurációs beállítások
-│   ├── database.py           # SQLite adatbázis kezelés
-│   ├── models.py             # Adatmodell osztályok
+│   ├── __init__.py          # Flask application factory
+│   ├── config.py            # Configuration settings
+│   ├── database.py          # SQLite database handling
+│   ├── models.py            # Data model classes
 │   └── routes/
-│       ├── auth.py           # Autentikáció
-│       ├── products.py       # Termékkezelés
-│       ├── inventory.py      # Készletkezelés
-│       ├── dashboard.py      # Főoldal
-│       └── backup.py         # Backup kezelés
-├── templates/                # HTML sablonok
-│   ├── base.html
-│   ├── login.html
-│   ├── dashboard.html
-│   ├── products/
-│   ├── inventory/
-│   └── backup/
-├── static/
-│   ├── css/style.css
-│   └── js/app.js
-├── data/                     # SQLite adatbázis (automatikusan létrejön)
-├── backups/                  # Backup fájlok
-├── run.py                    # Fejlesztési szerver
-├── wsgi.py                   # Production szerver
-├── requirements.txt          # Python függőségek
+│       ├── auth.py          # Authentication
+│       ├── products.py      # Product management
+│       ├── inventory.py     # Inventory management
+│       ├── dashboard.py     # Homepage
+│       └── backup.py        # Backup handling
+├── templates/               # HTML templates
+├── static/                  # CSS, JS
+├── data/                    # SQLite database
+├── backups/                 # Backup files
+├── docker-compose.yml       # Docker configuration
+├── Dockerfile               # Docker image
+├── requirements.txt         # Python dependencies
 └── README.md
 ```
 
-## API végpontok
+---
 
-### Vonalkód keresés
-```
+## API
+
+### Barcode Search
+
+```http
 GET /products/api/barcode/<barcode>
 ```
 
-Válasz:
+**Response:**
+
 ```json
 {
   "success": true,
@@ -360,34 +340,40 @@ Válasz:
 }
 ```
 
-## Későbbi fejlesztési lehetőségek
+---
 
-- [ ] Mobilos vonalkód olvasó integráció
-- [ ] Remote hozzáférés (VPN/HTTPS)
-- [ ] Felhasználókezelés (több felhasználó)
-- [ ] Beszállító kezelés
-- [ ] Rendelés kezelés
-- [ ] Riportok és statisztikák exportálása
-- [ ] REST API bővítése
+## Troubleshooting
 
-## Hibaelhárítás
+| Problem | Solution |
+|---------|----------|
+| Application won't start | Check `python3 --version`, `pip list` |
+| Login failed | Verify `APP_PASSWORD` environment variable |
+| Backup not working | Check `backups/` directory permissions |
+| Docker error | Run `docker compose logs -f` |
 
-### Az alkalmazás nem indul
+### Viewing Logs
 
-1. Ellenőrizze a Python verziót: `python3 --version`
-2. Ellenőrizze a függőségeket: `pip list`
-3. Nézze meg a logokat: `sudo journalctl -u edibles-leltar -f`
+```bash
+# Systemd
+sudo journalctl -u edibles-leltar -f
 
-### Nem tudok bejelentkezni
+# Docker
+docker compose logs -f
+```
 
-1. Ellenőrizze az `APP_PASSWORD` környezeti változót
-2. Alapértelmezett jelszó: `leltar2024`
+---
 
-### Backup nem működik
+## Roadmap
 
-1. Ellenőrizze a `backups/` mappa jogosultságait
-2. Hálózati backup esetén ellenőrizze a hálózati mappa csatlakoztatását
+- [ ] Remote access (VPN/HTTPS)
+- [ ] User management (multiple users)
+- [ ] Supplier management
+- [ ] Order management
+- [ ] Reports and statistics export
+- [ ] REST API expansion
 
-## Licenc
+---
+
+## License
 
 MIT License
