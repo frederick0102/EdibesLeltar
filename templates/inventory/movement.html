@@ -239,10 +239,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- HTML5 QRCode Library -->
+<!-- HTML5 QRCode Library (fallback) -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='js/barcode-scanner.js') }}"></script>
 <script>
-let html5QrCode = null;
+let barcodeScanner = null;
 let isScanning = false;
 let productLocationData = {};
 
@@ -350,7 +351,7 @@ document.getElementById('barcodeForm').addEventListener('submit', function(e) {
     }
 });
 
-// Kamera indítása
+// Kamera indítása - optimalizált scanner
 document.getElementById('startScannerBtn').addEventListener('click', async function() {
     const container = document.getElementById('barcode-scanner-container');
     
@@ -358,105 +359,60 @@ document.getElementById('startScannerBtn').addEventListener('click', async funct
         return;
     }
     
-    // Ellenőrizzük, hogy van-e egyáltalán kamera
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(d => d.kind === 'videoinput');
-        
-        if (cameras.length === 0) {
-            alert('Nem található kamera az eszközön!\n\nHasználja a vonalkód beviteli mezőt kézi beíráshoz vagy külső vonalkód olvasóval.');
-            return;
-        }
-        
-        console.log('Elérhető kamerák:', cameras);
-    } catch (e) {
-        console.log('Eszköz lekérdezési hiba:', e);
+    // Ellenőrizzük a támogatottságot
+    if (!BarcodeScanner.isSupported()) {
+        alert('Nem található kamera az eszközön!\n\nHasználja a vonalkód beviteli mezőt kézi beíráshoz vagy külső vonalkód olvasóval.');
+        return;
     }
     
     container.classList.add('active');
     
-    html5QrCode = new Html5Qrcode("reader");
-    
-    const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 100 },
-        aspectRatio: 1.777,
-        formatsToSupport: [
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.QR_CODE
-        ]
-    };
-    
-    const onScanSuccess = (decodedText, decodedResult) => {
-        console.log('Vonalkód beolvasva:', decodedText);
-        document.getElementById('barcodeInput').value = decodedText;
-        
-        // Keresés és kamera leállítása
-        if (searchBarcode(decodedText)) {
-            stopScanner();
-        }
-    };
-    
-    const onScanError = (errorMessage) => {
-        // Hibák figyelmen kívül hagyása (folyamatos szkennelés)
-    };
-    
-    // Próbáljuk először a hátsó kamerát, ha nem sikerül, akkor bármelyiket
     try {
-        await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
-        isScanning = true;
-    } catch (err1) {
-        console.log('Hátsó kamera nem elérhető, próbálom az elsőt:', err1);
-        try {
-            await html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanError);
-            isScanning = true;
-        } catch (err2) {
-            console.log('Elülső kamera sem elérhető, próbálom bármelyiket:', err2);
-            try {
-                // Utolsó próba: bármelyik elérhető kamera
-                const devices = await Html5Qrcode.getCameras();
-                if (devices && devices.length > 0) {
-                    await html5QrCode.start(devices[0].id, config, onScanSuccess, onScanError);
-                    isScanning = true;
-                } else {
-                    throw new Error('Nincs elérhető kamera');
-                }
-            } catch (err3) {
-                console.error('Végső kamera hiba:', err3);
-                container.classList.remove('active');
-                
-                let errorMsg = 'Nem sikerült a kamerát elindítani.\n\n';
-                if (err3.name === 'NotAllowedError') {
-                    errorMsg += 'A kamera hozzáférés meg lett tagadva.\nEngedélyezze a böngésző beállításaiban!';
-                } else if (err3.name === 'NotFoundError') {
-                    errorMsg += 'Nem található kamera az eszközön.';
-                } else if (err3.name === 'NotReadableError') {
-                    errorMsg += 'A kamera már használatban van egy másik alkalmazás által.';
-                } else {
-                    errorMsg += 'Használja a vonalkód beviteli mezőt kézi beíráshoz.';
-                }
-                alert(errorMsg);
+        barcodeScanner = new BarcodeScanner('reader', (decodedText, format) => {
+            console.log('Vonalkód beolvasva:', decodedText, format);
+            document.getElementById('barcodeInput').value = decodedText;
+            
+            // Keresés és kamera leállítása
+            if (searchBarcode(decodedText)) {
+                stopScanner();
             }
+        }, {
+            fps: 15,
+            qrbox: { width: 280, height: 120 }
+        });
+        
+        await barcodeScanner.start();
+        isScanning = true;
+        console.log('Scanner started, native API:', BarcodeScanner.hasNativeSupport());
+    } catch (err) {
+        console.error('Kamera hiba:', err);
+        container.classList.remove('active');
+        
+        let errorMsg = 'Nem sikerült a kamerát elindítani.\n\n';
+        if (err.name === 'NotAllowedError') {
+            errorMsg += 'A kamera hozzáférés meg lett tagadva.\nEngedélyezze a böngésző beállításaiban!';
+        } else if (err.name === 'NotFoundError') {
+            errorMsg += 'Nem található kamera az eszközön.';
+        } else if (err.name === 'NotReadableError') {
+            errorMsg += 'A kamera már használatban van egy másik alkalmazás által.';
+        } else {
+            errorMsg += 'Használja a vonalkód beviteli mezőt kézi beíráshoz.';
         }
+        alert(errorMsg);
     }
 });
 
 // Kamera leállítása
-function stopScanner() {
-    if (html5QrCode && isScanning) {
-        html5QrCode.stop().then(() => {
-            html5QrCode.clear();
-            isScanning = false;
-            document.getElementById('barcode-scanner-container').classList.remove('active');
-        }).catch((err) => {
+async function stopScanner() {
+    if (barcodeScanner && isScanning) {
+        try {
+            await barcodeScanner.stop();
+        } catch (err) {
             console.error('Leállítási hiba:', err);
-        });
+        }
+        barcodeScanner = null;
+        isScanning = false;
+        document.getElementById('barcode-scanner-container').classList.remove('active');
     }
 }
 

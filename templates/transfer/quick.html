@@ -158,28 +158,32 @@ body {
 </audio>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='js/barcode-scanner.js') }}"></script>
 <script>
 const SOURCE_ID = {{ source.id }};
 const TARGET_ID = {{ target.id }};
-let html5QrCode;
+let barcodeScanner = null;
 let currentProduct = null;
 let maxStock = 0;
 
-// Kamera indítása
+// Kamera indítása - optimalizált scanner
 async function initCamera() {
-    html5QrCode = new Html5Qrcode("reader");
+    if (!BarcodeScanner.isSupported()) {
+        document.getElementById('reader').innerHTML = 
+            '<div class="text-white text-center p-4"><i class="bi bi-camera-video-off display-1"></i><p>Kamera nem elérhető</p><p class="small">Használja a kézi bevitelt</p></div>';
+        return;
+    }
     
     try {
-        await html5QrCode.start(
-            { facingMode: "environment" },
-            { 
-                fps: 10, 
-                qrbox: { width: 280, height: 140 },
-                aspectRatio: 2
-            },
-            onScanSuccess,
-            () => {}
-        );
+        barcodeScanner = new BarcodeScanner('reader', (barcode, format) => {
+            onScanSuccess(barcode);
+        }, {
+            fps: 15,
+            qrbox: { width: 280, height: 140 }
+        });
+        
+        await barcodeScanner.start();
+        console.log('Scanner started, native API:', BarcodeScanner.hasNativeSupport());
     } catch (err) {
         document.getElementById('reader').innerHTML = 
             '<div class="text-white text-center p-4"><i class="bi bi-camera-video-off display-1"></i><p>Kamera nem elérhető</p><p class="small">Használja a kézi bevitelt</p></div>';

@@ -203,11 +203,13 @@
     </div>
 </div>
 
-<!-- html5-qrcode library -->
+<!-- html5-qrcode library (fallback) -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- Optimized barcode scanner -->
+<script src="{{ url_for('static', filename='js/barcode-scanner.js') }}"></script>
 
 <script>
-let html5QrCode = null;
+let barcodeScanner = null;
 let selectedProductId = null;
 let availableStock = 0;
 
@@ -342,7 +344,7 @@ function executeTransfer() {
     });
 }
 
-// Kamera kezelés
+// Kamera kezelés - új optimalizált scanner
 function toggleCamera() {
     const preview = document.getElementById('cameraPreview');
     if (preview.classList.contains('d-none')) {
@@ -356,26 +358,31 @@ async function startCamera() {
     const preview = document.getElementById('cameraPreview');
     preview.classList.remove('d-none');
     
-    html5QrCode = new Html5Qrcode("reader");
-    
-    const config = { 
-        fps: 10, 
-        qrbox: { width: 250, height: 150 },
-        aspectRatio: 1.5
-    };
+    // Kamera hozzáférés ellenőrzése
+    if (!BarcodeScanner.isSupported()) {
+        showToast('A kamera nem támogatott ezen az eszközön', 'danger');
+        preview.classList.add('d-none');
+        return;
+    }
     
     try {
-        await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText) => {
-                searchByBarcode(decodedText);
-            },
-            (errorMessage) => {}
-        );
+        barcodeScanner = new BarcodeScanner('reader', (barcode, format) => {
+            console.log('Beolvasva:', barcode, format);
+            searchByBarcode(barcode);
+        }, {
+            fps: 15,
+            qrbox: { width: 280, height: 150 }
+        });
+        
+        await barcodeScanner.start();
+        
+        // Jelezzük, ha natív API-t használunk
+        if (BarcodeScanner.hasNativeSupport()) {
+            console.log('Natív Barcode Detection API használatban');
+        }
     } catch (err) {
         console.error('Kamera hiba:', err);
-        showToast('Nem sikerült a kamerát elindítani', 'danger');
+        showToast('Nem sikerült a kamerát elindítani. ' + (err.message || 'A kamera hozzáférés meg lett tagadva. Engedélyezze a böngésző beállításaiban.'), 'danger');
         preview.classList.add('d-none');
     }
 }
@@ -383,12 +390,13 @@ async function startCamera() {
 async function stopCamera() {
     const preview = document.getElementById('cameraPreview');
     
-    if (html5QrCode && html5QrCode.isScanning) {
+    if (barcodeScanner) {
         try {
-            await html5QrCode.stop();
+            await barcodeScanner.stop();
         } catch (err) {
             console.error('Kamera leállítási hiba:', err);
         }
+        barcodeScanner = null;
     }
     
     preview.classList.add('d-none');
