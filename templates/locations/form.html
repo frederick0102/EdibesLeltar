@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}{{ 'Helyszín szerkesztése' if location else 'Új helyszín' }} - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Helyszín szerkesztése' if location else 'Új helyszín létrehozása',
+        subtitle='Raktár, autó vagy automata adatai',
+        icon='geo-alt'
+    ) }}
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="POST">
+                        <!-- Típus (csak új helyszínnél) -->
+                        {% if not location %}
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-tags me-1"></i>Helyszín típusa <span class="text-danger">*</span>
+                            </label>
+                            <div class="row g-3">
+                                {% for type_code, type_label in location_types %}
+                                <div class="col-md-4">
+                                    <input type="radio" class="btn-check" name="location_type" 
+                                           id="type_{{ type_code }}" value="{{ type_code }}" 
+                                           {{ 'checked' if loop.first }}>
+                                    <label class="btn btn-outline-{{ 'success' if type_code == 'WAREHOUSE' else ('info' if type_code == 'CAR' else 'warning') }} w-100 py-3" 
+                                           for="type_{{ type_code }}">
+                                        <i class="bi bi-{{ LocationType.get_icon(type_code) }} d-block fs-2 mb-1"></i>
+                                        {{ type_label }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="mb-3">
+                            <span class="badge bg-{{ 'success' if location.location_type == 'WAREHOUSE' else ('info' if location.location_type == 'CAR' else 'warning') }} fs-6">
+                                <i class="bi bi-{{ LocationType.get_icon(location.location_type) }} me-1"></i>
+                                {{ LocationType.get_label(location.location_type) }}
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Név -->
+                        <div class="mb-3">
+                            <label for="name" class="form-label">
+                                Megnevezés <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control form-control-lg" id="name" name="name" 
+                                   value="{{ location.name if location else '' }}" 
+                                   placeholder="pl. Központi Raktár, Autó #1, Irodaház automata"
+                                   required>
+                        </div>
+                        
+                        <!-- Leírás -->
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Leírás</label>
+                            <textarea class="form-control" id="description" name="description" rows="2"
+                                      placeholder="Rövid leírás a helyszínről">{{ location.description if location else '' }}</textarea>
+                        </div>
+                        
+                        <!-- Cím -->
+                        <div class="mb-3">
+                            <label for="address" class="form-label">
+                                <i class="bi bi-pin-map me-1"></i>Cím/Helyszín
+                            </label>
+                            <input type="text" class="form-control" id="address" name="address" 
+                                   value="{{ location.address if location else '' }}"
+                                   placeholder="pl. Budapest, Fő utca 1.">
+                        </div>
+                        
+                        {% if location %}
+                        <!-- Aktív státusz -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_active" 
+                                       name="is_active" value="1" 
+                                       {{ 'checked' if location.is_active }}>
+                                <label class="form-check-label" for="is_active">
+                                    Aktív helyszín
+                                </label>
+                            </div>
+                            <small class="text-muted">Inaktív helyszínek nem jelennek meg a mozgás űrlapokon</small>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Gombok -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-lg me-1"></i>
+                                {{ 'Mentés' if location else 'Létrehozás' }}
+                            </button>
+                            <a href="{{ url_for('locations.list_locations') }}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-x-lg me-1"></i>Mégse
+                            </a>
+                            
+                            {% if location and not location.is_deleted %}
+                            <form action="{{ url_for('locations.delete_location', id=location.id) }}" 
+                                  method="POST" class="ms-auto"
+                                  onsubmit="return confirm('Biztosan törli a helyszínt?');">
+                                <button type="submit" class="btn btn-outline-danger btn-lg">
+                                    <i class="bi bi-trash me-1"></i>Törlés
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

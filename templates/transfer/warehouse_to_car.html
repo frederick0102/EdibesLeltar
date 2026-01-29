@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Autó feltöltés - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {{ page_header(
+        title='Autó feltöltése',
+        subtitle='Termékek áthelyezése raktárból autóba',
+        icon='truck'
+    ) }}
+    
+    <div class="row">
+        <!-- Baloldal: Űrlap -->
+        <div class="col-lg-5 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building me-2"></i>Raktár → 
+                        <i class="bi bi-truck me-2"></i>Autó
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="transferForm">
+                        <!-- Forrás: Raktár -->
+                        <div class="mb-3">
+                            <label for="source_location_id" class="form-label fw-bold">
+                                <i class="bi bi-building me-1"></i>Forrás raktár
+                            </label>
+                            <select class="form-select form-select-lg" id="source_location_id" 
+                                    name="source_location_id" required onchange="refreshProducts()">
+                                <option value="">Válasszon raktárat...</option>
+                                {% for wh in warehouses %}
+                                <option value="{{ wh.id }}" {{ 'selected' if selected_source == wh.id }}>
+                                    {{ wh.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Cél: Autó -->
+                        <div class="mb-3">
+                            <label for="target_location_id" class="form-label fw-bold">
+                                <i class="bi bi-truck me-1"></i>Cél autó
+                            </label>
+                            <select class="form-select form-select-lg" id="target_location_id" 
+                                    name="target_location_id" required>
+                                <option value="">Válasszon autót...</option>
+                                {% for car in cars %}
+                                <option value="{{ car.id }}" {{ 'selected' if selected_target == car.id }}>
+                                    {{ car.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- Termék választás -->
+                        <div class="mb-3">
+                            <label for="product_id" class="form-label fw-bold">
+                                <i class="bi bi-box me-1"></i>Termék
+                            </label>
+                            <select class="form-select form-select-lg" id="product_id" 
+                                    name="product_id" required>
+                                <option value="">Válasszon terméket...</option>
+                                {% for prod in products %}
+                                <option value="{{ prod.id }}" 
+                                        data-stock="{{ prod.available_quantity }}"
+                                        data-unit="{{ prod.unit_abbr or 'db' }}">
+                                    {{ prod.name }}
+                                    {% if prod.package_size %}({{ prod.package_size }}){% endif %}
+                                    - {{ prod.available_quantity|int }} {{ prod.unit_abbr or 'db' }} elérhető
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Vonalkód kereső -->
+                        <div class="mb-3">
+                            <label for="barcode_search" class="form-label">
+                                <i class="bi bi-upc-scan me-1"></i>Vagy vonalkóddal
+                            </label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="barcode_search" 
+                                       placeholder="Olvassa be vagy írja be a vonalkódot">
+                                <button type="button" class="btn btn-outline-secondary" onclick="searchBarcode()">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Mennyiség -->
+                        <div class="mb-3">
+                            <label for="quantity" class="form-label fw-bold">
+                                <i class="bi bi-123 me-1"></i>Mennyiség
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <button type="button" class="btn btn-outline-secondary" onclick="adjustQuantity(-1)">
+                                    <i class="bi bi-dash-lg"></i>
+                                </button>
+                                <input type="number" class="form-control text-center fs-3" id="quantity" 
+                                       name="quantity" value="1" min="1" step="1" required>
+                                <button type="button" class="btn btn-outline-secondary" onclick="adjustQuantity(1)">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                            <div class="text-muted small mt-1" id="stockInfo"></div>
+                        </div>
+                        
+                        <!-- Megjegyzés -->
+                        <div class="mb-4">
+                            <label for="note" class="form-label">Megjegyzés</label>
+                            <input type="text" class="form-control" id="note" name="note" 
+                                   placeholder="Opcionális megjegyzés">
+                        </div>
+                        
+                        <!-- Küldés -->
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            <i class="bi bi-arrow-right-circle me-2"></i>Áthelyezés végrehajtása
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Jobboldal: Raktár készlet -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-boxes me-2"></i>Raktár készlet
+                    </h5>
+                    <span class="badge bg-secondary">{{ products|length }} termék</span>
+                </div>
+                
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Termék</th>
+                                <th>Vonalkód</th>
+                                <th class="text-end">Elérhető</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prod in products %}
+                            <tr class="{{ 'table-danger' if prod.available_quantity == 0 }}">
+                                <td>
+                                    <strong>{{ prod.name }}</strong>
+                                    {% if prod.package_size %}<small class="text-muted">({{ prod.package_size }})</small>{% endif %}
+                                </td>
+                                <td>
+                                    {% if prod.barcode %}
+                                    <code class="small">{{ prod.barcode }}</code>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge {{ 'bg-danger' if prod.available_quantity == 0 else 'bg-success' }} fs-6">
+                                        {{ prod.available_quantity|int }}
+                                    </span>
+                                    <small>{{ prod.unit_abbr or 'db' }}</small>
+                                </td>
+                                <td>
+                                    {% if prod.available_quantity > 0 %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                                            onclick="selectProduct({{ prod.id }})">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function adjustQuantity(delta) {
+    const input = document.getElementById('quantity');
+    const newVal = Math.max(1, parseInt(input.value) + delta);
+    input.value = newVal;
+}
+
+function selectProduct(productId) {
+    document.getElementById('product_id').value = productId;
+    document.getElementById('quantity').focus();
+    updateStockInfo();
+}
+
+function updateStockInfo() {
+    const select = document.getElementById('product_id');
+    const selected = select.options[select.selectedIndex];
+    const stockInfo = document.getElementById('stockInfo');
+    
+    if (selected && selected.dataset.stock) {
+        const stock = parseInt(selected.dataset.stock);
+        const unit = selected.dataset.unit || 'db';
+        stockInfo.textContent = `Elérhető: ${stock} ${unit}`;
+        document.getElementById('quantity').max = stock;
+    } else {
+        stockInfo.textContent = '';
+    }
+}
+
+function searchBarcode() {
+    const barcode = document.getElementById('barcode_search').value.trim();
+    const sourceId = document.getElementById('source_location_id').value;
+    
+    if (!barcode) return;
+    
+    fetch(`/transfer/api/product-by-barcode/${barcode}?location_id=${sourceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                selectProduct(data.product.id);
+                document.getElementById('barcode_search').value = '';
+            } else {
+                alert('Termék nem található: ' + barcode);
+            }
+        });
+}
+
+function refreshProducts() {
+    const sourceId = document.getElementById('source_location_id').value;
+    if (sourceId) {
+        window.location.href = `{{ url_for('transfer.warehouse_to_car') }}?source=${sourceId}&target=${document.getElementById('target_location_id').value || ''}`;
+    }
+}
+
+document.getElementById('product_id').addEventListener('change', updateStockInfo);
+document.getElementById('barcode_search').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchBarcode();
+    }
+});
+
+// Kezdeti frissítés
+updateStockInfo();
+</script>
+{% endblock %}

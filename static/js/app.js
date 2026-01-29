@@ -46,9 +46,11 @@ function initTooltips() {
 
 /**
  * Alertek automatikus eltüntetése
+ * Csak a success típusú alertek tűnnek el automatikusan
+ * Az info, warning és danger típusúak megmaradnak
  */
 function autoDismissAlerts() {
-    const alerts = document.querySelectorAll('.alert:not(.alert-warning):not(.alert-danger)');
+    const alerts = document.querySelectorAll('.alert.alert-success');
     alerts.forEach(function(alert) {
         setTimeout(function() {
             const bsAlert = new bootstrap.Alert(alert);

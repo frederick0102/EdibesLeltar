@@ -3,11 +3,39 @@
 
 {% block title %}Készlet - Edibes Leltár{% endblock %}
 
+{% block extra_css %}
+<style>
+    .location-breakdown {
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+    .location-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.15rem;
+        font-size: 0.7rem;
+    }
+    .location-warehouse { background-color: #e3f2fd; color: #1565c0; }
+    .location-car { background-color: #fff3e0; color: #e65100; }
+    .location-vending { background-color: #f3e5f5; color: #7b1fa2; }
+    .total-badge {
+        background-color: #f5f5f5;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     {{ page_header(
         title='Készlet',
-        subtitle='Aktuális készletállapot',
+        subtitle='Aktuális készletállapot helyszínenként',
         icon='boxes',
         button_text='Készletmozgás',
         button_url=url_for('inventory.add_movement')
@@ -16,25 +44,35 @@
     <!-- Szűrők -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
-            <form method="GET" class="row g-3">
-                <div class="col-md-4">
+            <form method="GET" action="{{ url_for('inventory.list_inventory') }}" class="row g-3">
+                <div class="col-md-3">
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
                         <input type="text" class="form-control" name="search" 
                                placeholder="Keresés..." value="{{ search }}">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select class="form-select" name="category">
                         <option value="">Összes kategória</option>
                         {% for cat in categories %}
-                        <option value="{{ cat.id }}" {% if selected_category == cat.id|string %}selected{% endif %}>
+                        <option value="{{ cat.id }}" {% if selected_category == cat.id %}selected{% endif %}>
                             {{ cat.name }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
+                    <select class="form-select" name="location">
+                        <option value="">🌍 Összes helyszín</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.id }}" {% if selected_location == loc.id %}selected{% endif %}>
+                            {{ LocationType.get_icon(loc.location_type) }} {{ loc.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <select class="form-select" name="stock">
                         <option value="">Összes készlet</option>
                         <option value="low" {% if stock_filter == 'low' %}selected{% endif %}>Alacsony készlet</option>
@@ -50,6 +88,28 @@
         </div>
     </div>
     
+    <!-- Helyszín összesítő (ha nincs szűrő) -->
+    {% if not selected_location %}
+    <div class="alert alert-info mb-4">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-info-circle me-2"></i>
+            <span><strong>Összesített nézet:</strong> Az alábbi táblázat az összes helyszín készletét mutatja összesítve. A helyszínenkénti bontás minden terméknél látható.</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning mb-4">
+        <div class="d-flex align-items-center justify-content-between">
+            <span>
+                <i class="bi bi-filter me-2"></i>
+                <strong>Szűrt nézet:</strong> Csak a kiválasztott helyszín készlete látható.
+            </span>
+            <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-x me-1"></i>Szűrő törlése
+            </a>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Készlet lista -->
     <div class="card border-0 shadow-sm">
         <div class="table-responsive">
@@ -59,9 +119,16 @@
                         <th>Termék</th>
                         <th>Kategória</th>
                         <th>Vonalkód</th>
-                        <th class="text-center">Készlet</th>
+                        <th class="text-center">
+                            {% if selected_location %}
+                            Készlet
+                            {% else %}
+                            Össz. készlet<br>
+                            <small class="text-muted fw-normal">Helyszínenkénti bontás</small>
+                            {% endif %}
+                        </th>
                         <th class="text-center">Min.</th>
-                        <th class="text-end">Gyors műveletek</th>
+                        <th class="text-end">Műveletek</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,25 +148,41 @@
                             {{ barcode_display(item.barcode) }}
                         </td>
                         <td class="text-center">
-                            <span class="fs-5 fw-bold quantity-display" id="qty-{{ item.id }}">
-                                {{ "%.0f"|format(item.current_quantity) }}
-                            </span>
-                            <small class="text-muted">db</small>
+                            <!-- Össz mennyiség -->
+                            <div>
+                                <span class="fs-5 fw-bold quantity-display" id="qty-{{ item.id }}">
+                                    {{ "%.0f"|format(item.current_quantity) }}
+                                </span>
+                                <small class="text-muted">db</small>
+                                {% if not selected_location %}
+                                <span class="total-badge ms-1">összesen</span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Helyszínenkénti bontás -->
+                            {% if not selected_location and item.id in location_quantities %}
+                            <div class="location-breakdown">
+                                {% for loc in location_quantities[item.id] %}
+                                <span class="location-badge location-{{ loc.location_type|lower }}">
+                                    {{ LocationType.get_icon(loc.location_type) }}
+                                    {{ loc.location_name }}: <strong>{{ "%.0f"|format(loc.quantity) }}</strong>
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="text-center text-muted">
                             {{ "%.0f"|format(item.min_stock_level) }}
                         </td>
                         <td class="text-end">
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-danger" onclick="quickStockOut({{ item.id }})" title="Kivét -1">
-                                    <i class="bi bi-dash"></i>
-                                </button>
-                                <button class="btn btn-outline-success" onclick="quickStockIn({{ item.id }})" title="Bevét +1">
-                                    <i class="bi bi-plus"></i>
-                                </button>
+                                <a href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}" 
+                                   class="btn btn-outline-primary" title="Mozgás rögzítés">
+                                    <i class="bi bi-plus-minus"></i>
+                                </a>
                                 <button class="btn btn-outline-primary" data-bs-toggle="modal" 
-                                        data-bs-target="#setQtyModal{{ item.id }}" title="Beállítás">
-                                    <i class="bi bi-pencil"></i>
+                                        data-bs-target="#detailModal{{ item.id }}" title="Részletek">
+                                    <i class="bi bi-eye"></i>
                                 </button>
                             </div>
                         </td>
@@ -116,32 +199,74 @@
         <small>Összesen: {{ inventory|length }} termék</small>
     </div>
     
-    <!-- Mennyiség beállítás modalok - táblázaton kívül -->
+    <!-- Részletek modalok -->
     {% for item in inventory %}
-    <div class="modal fade" id="setQtyModal{{ item.id }}" tabindex="-1" aria-labelledby="setQtyModalLabel{{ item.id }}" aria-hidden="true">
-        <div class="modal-dialog modal-sm">
+    <div class="modal fade" id="detailModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ url_for('inventory.set_quantity', product_id=item.id) }}">
-                    <div class="modal-header">
-                        <h6 class="modal-title" id="setQtyModalLabel{{ item.id }}">{{ item.name }}{% if item.package_size or item.unit_abbr %} ({{ item.package_size or '' }}{% if item.package_size and item.unit_abbr %} {% endif %}{{ item.unit_abbr or '' }}){% endif %}</h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        {{ item.name }}
+                        {% if item.package_size or item.unit_abbr %}
+                        <small class="text-muted">({{ item.package_size or '' }}{% if item.package_size and item.unit_abbr %} {% endif %}{{ item.unit_abbr or '' }})</small>
+                        {% endif %}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Összesített készlet -->
+                    <div class="text-center mb-4">
+                        <div class="display-4 fw-bold text-primary">{{ "%.0f"|format(item.current_quantity) }}</div>
+                        <div class="text-muted">Összes készlet</div>
                     </div>
-                    <div class="modal-body">
-                        <label class="form-label">Új mennyiség (db)</label>
-                        <input type="number" class="form-control" name="quantity" 
-                               value="{{ item.current_quantity|int }}" min="0" step="1" required>
-                        <label class="form-label mt-2">Megjegyzés</label>
-                        <input type="text" class="form-control" name="note" 
-                               value="Leltározás">
+                    
+                    <!-- Helyszínenkénti bontás -->
+                    <h6 class="mb-3"><i class="bi bi-geo-alt me-1"></i>Készlet helyszínenként</h6>
+                    {% if item.id in location_quantities %}
+                    <div class="list-group">
+                        {% for loc in location_quantities[item.id] %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                <span class="me-2">{{ LocationType.get_icon(loc.location_type) }}</span>
+                                {{ loc.location_name }}
+                                <small class="text-muted">({{ LocationType.get_label(loc.location_type) }})</small>
+                            </span>
+                            <span class="badge bg-primary rounded-pill fs-6">{{ "%.0f"|format(loc.quantity) }}</span>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
-                        <button type="submit" class="btn btn-primary">Mentés</button>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-inbox"></i> Nincs készlet egyik helyszínen sem
                     </div>
-                </form>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <a href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}" class="btn btn-primary">
+                        <i class="bi bi-plus-minus me-1"></i>Mozgás rögzítés
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
+                </div>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit: select változáskor azonnal szűrés
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form[method="GET"]');
+    if (form) {
+        // Minden select elemre auto-submit
+        form.querySelectorAll('select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                form.submit();
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

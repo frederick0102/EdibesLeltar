@@ -1,0 +1,25 @@
+# Edibes Leltár - Docker Compose konfiguráció
+# Raspberry Pi / Linux telepítéshez
+
+services:
+  edibes-leltar:
+    build: .
+    container_name: edibes-leltar
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Adatbázis megőrzése a host-on
+      - ./data:/app/data
+      # Backup-ok megőrzése
+      - ./backups:/app/backups
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=false
+      - SECRET_KEY=${SECRET_KEY:-change-this-in-production-to-a-secure-random-key}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

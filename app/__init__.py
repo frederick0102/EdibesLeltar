@@ -35,11 +35,15 @@ def create_app(config_class=Config):
     from app.routes.inventory import inventory_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.backup import backup_bp
+    from app.routes.locations import locations_bp
+    from app.routes.transfer import transfer_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(inventory_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(backup_bp)
+    app.register_blueprint(locations_bp)
+    app.register_blueprint(transfer_bp)
     
     return app

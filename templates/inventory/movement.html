@@ -42,6 +42,16 @@
         50% { transform: scale(1.02); }
         100% { transform: scale(1); }
     }
+    .location-stock-info {
+        font-size: 0.85rem;
+    }
+    .location-badge-sm {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+    }
+    .location-warehouse { background-color: #e3f2fd; color: #1565c0; }
+    .location-car { background-color: #fff3e0; color: #e65100; }
+    .location-vending { background-color: #f3e5f5; color: #7b1fa2; }
 </style>
 {% endblock %}
 
@@ -57,7 +67,7 @@
                     <h1 class="h3 mb-0">
                         <i class="bi bi-plus-minus me-2"></i>Készletmozgás rögzítése
                     </h1>
-                    <p class="text-muted mb-0">Bevételezés, kivételezés, korrekció</p>
+                    <p class="text-muted mb-0">Bevételezés, kivételezés, korrekció - helyszín megadásával</p>
                 </div>
             </div>
             
@@ -100,6 +110,27 @@
                 <div class="card-body p-4">
                     <form method="POST">
                         <div class="row g-3">
+                            <!-- Helyszín kiválasztása - FONTOS -->
+                            <div class="col-12">
+                                <label for="location_id" class="form-label">
+                                    <i class="bi bi-geo-alt me-1"></i>Helyszín <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select form-select-lg" id="location_id" name="location_id" required>
+                                    {% for location in locations %}
+                                    <option value="{{ location.id }}" 
+                                            data-type="{{ location.location_type }}"
+                                            {% if selected_location_id and selected_location_id|string == location.id|string %}selected{% endif %}>
+                                        {{ LocationType.get_icon(location.location_type) }} {{ location.name }} 
+                                        ({{ LocationType.get_label(location.location_type) }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Válassza ki, melyik helyszínen történik a készletmozgás.
+                                </div>
+                            </div>
+                            
                             <!-- Termék kiválasztása -->
                             <div class="col-12">
                                 <label for="product_id" class="form-label">
@@ -110,22 +141,31 @@
                                     {% for product in products %}
                                     <option value="{{ product.id }}" 
                                             data-quantity="{{ product.current_quantity }}"
+                                            data-location-quantities="{{ product.location_quantities|tojson|e }}"
                                             data-unit="db"
                                             {% if selected_product_id and selected_product_id == product.id %}selected{% endif %}>
                                         {{ product.name }}{% if product.package_size or product.unit_abbr %} ({{ product.package_size or '' }}{% if product.package_size and product.unit_abbr %} {% endif %}{{ product.unit_abbr or '' }}){% endif %}
                                         {% if product.barcode %} [{{ product.barcode }}]{% endif %}
-                                        - Készlet: {{ "%.0f"|format(product.current_quantity) }} db
+                                        - Össz: {{ "%.0f"|format(product.current_quantity) }} db
                                     </option>
                                     {% endfor %}
                                 </select>
                             </div>
                             
-                            <!-- Jelenlegi készlet megjelenítése -->
-                            <div class="col-12" id="currentStockInfo" style="display: none;">
+                            <!-- Készlet információ megjelenítése -->
+                            <div class="col-12" id="stockInfoPanel" style="display: none;">
                                 <div class="alert alert-info mb-0">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span>Jelenlegi készlet:</span>
-                                        <span class="fs-4 fw-bold" id="currentStockDisplay">0</span>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span><strong>Össz készlet:</strong></span>
+                                        <span class="fs-5 fw-bold" id="totalStockDisplay">0</span>
+                                    </div>
+                                    <hr class="my-2">
+                                    <div class="location-stock-info" id="locationStockDisplay">
+                                        <!-- Helyszínenkénti bontás JS-ből töltődik -->
+                                    </div>
+                                    <div class="mt-2 pt-2 border-top" id="selectedLocationStock">
+                                        <strong><i class="bi bi-geo-alt"></i> Kiválasztott helyszínen:</strong>
+                                        <span class="fs-5 fw-bold ms-2" id="currentLocationQty">0</span> db
                                     </div>
                                 </div>
                             </div>
@@ -204,27 +244,65 @@
 <script>
 let html5QrCode = null;
 let isScanning = false;
+let productLocationData = {};
 
-// Termék választáskor készlet megjelenítése
-document.getElementById('product_id').addEventListener('change', function() {
-    const selected = this.options[this.selectedIndex];
-    const info = document.getElementById('currentStockInfo');
-    const display = document.getElementById('currentStockDisplay');
+// Helyszínenkénti készlet megjelenítése
+function updateStockDisplay() {
+    const productSelect = document.getElementById('product_id');
+    const locationSelect = document.getElementById('location_id');
+    const stockPanel = document.getElementById('stockInfoPanel');
+    const totalDisplay = document.getElementById('totalStockDisplay');
+    const locationDisplay = document.getElementById('locationStockDisplay');
+    const currentLocQty = document.getElementById('currentLocationQty');
     
-    if (!info || !display) {
-        console.warn('Készlet kijelző elemek nem találhatók');
+    if (!productSelect.value) {
+        stockPanel.style.display = 'none';
         return;
     }
     
-    if (this.value) {
-        const qty = selected.dataset.quantity || 0;
-        const unit = selected.dataset.unit || 'db';
-        display.textContent = `${Math.round(qty)} ${unit}`;
-        info.style.display = 'block';
-    } else {
-        info.style.display = 'none';
+    const selected = productSelect.options[productSelect.selectedIndex];
+    const totalQty = selected.dataset.quantity || 0;
+    const locationId = locationSelect.value;
+    
+    // Össz készlet
+    totalDisplay.textContent = `${Math.round(totalQty)} db`;
+    
+    // Helyszínenkénti bontás
+    let locationQuantities = [];
+    try {
+        locationQuantities = JSON.parse(selected.dataset.locationQuantities || '[]');
+    } catch(e) {
+        console.log('JSON parse hiba:', e);
     }
-});
+    
+    let locationHtml = '';
+    let currentLocationQuantity = 0;
+    
+    for (const loc of locationQuantities) {
+        const typeClass = 'location-' + loc.location_type.toLowerCase();
+        const icon = loc.location_type === 'WAREHOUSE' ? '🏭' : 
+                     loc.location_type === 'CAR' ? '🚚' : '📦';
+        
+        locationHtml += `<span class="badge ${typeClass} location-badge-sm me-1 mb-1">
+            ${icon} ${loc.name}: <strong>${Math.round(loc.quantity)}</strong>
+        </span>`;
+        
+        if (loc.id.toString() === locationId.toString()) {
+            currentLocationQuantity = loc.quantity;
+        }
+    }
+    
+    locationDisplay.innerHTML = locationHtml || '<span class="text-muted">Nincs készlet egyik helyszínen sem</span>';
+    currentLocQty.textContent = Math.round(currentLocationQuantity);
+    
+    stockPanel.style.display = 'block';
+}
+
+// Termék választáskor
+document.getElementById('product_id').addEventListener('change', updateStockDisplay);
+
+// Helyszín választáskor
+document.getElementById('location_id').addEventListener('change', updateStockDisplay);
 
 // Mennyiség módosítása
 function adjustQuantity(delta) {
@@ -386,7 +464,7 @@ document.getElementById('stopScannerBtn').addEventListener('click', stopScanner)
 
 // Kezdeti állapot beállítása ha van kiválasztott termék
 if (document.getElementById('product_id').value) {
-    document.getElementById('product_id').dispatchEvent(new Event('change'));
+    updateStockDisplay();
 }
 
 // Oldal elhagyásakor kamera leállítása

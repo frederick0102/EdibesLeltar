@@ -5,6 +5,7 @@ import sqlite3
 import os
 from flask import current_app, g
 from datetime import datetime
+from werkzeug.security import generate_password_hash
 
 
 def get_db_connection():
@@ -12,11 +13,21 @@ def get_db_connection():
     if 'db' not in g:
         g.db = sqlite3.connect(
             current_app.config['DATABASE_PATH'],
-            detect_types=sqlite3.PARSE_DECLTYPES
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            timeout=30.0  # Hosszabb timeout a konkurens hozzáféréshez
         )
         g.db.row_factory = sqlite3.Row
+        
+        # === KRITIKUS BEÁLLÍTÁSOK A RASPBERRY PI STABILITÁSÁHOZ ===
+        # WAL (Write-Ahead Logging) mód - biztonságosabb SD kártyán
+        g.db.execute("PRAGMA journal_mode = WAL")
+        # Szinkron mód - FULL a maximális adatbiztonsághoz
+        g.db.execute("PRAGMA synchronous = FULL")
         # Foreign key támogatás engedélyezése
         g.db.execute("PRAGMA foreign_keys = ON")
+        # Busy timeout - várakozás zárolásra
+        g.db.execute("PRAGMA busy_timeout = 30000")
+        
     return g.db
 
 
@@ -35,6 +46,22 @@ def get_db_session():
 def init_db():
     """Adatbázis inicializálása - táblák létrehozása"""
     db = get_db_connection()
+    
+    # === HELYSZÍNEK TÁBLA (ÚJ - Multi-location támogatás) ===
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            location_type TEXT NOT NULL CHECK(location_type IN ('WAREHOUSE', 'CAR', 'VENDING')),
+            description TEXT,
+            address TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deleted_at TIMESTAMP NULL,
+            is_deleted INTEGER DEFAULT 0
+        )
+    ''')
     
     # Termék kategóriák tábla
     db.execute('''
@@ -59,6 +86,16 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             deleted_at TIMESTAMP NULL,
             is_deleted INTEGER DEFAULT 0
+        )
+    ''')
+    
+    # Beállítások tábla
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL UNIQUE,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -88,7 +125,7 @@ def init_db():
     except:
         pass
     
-    # Készlet tábla (aktuális mennyiségek)
+    # Készlet tábla (aktuális mennyiségek) - RÉGI, visszafelé kompatibilitás
     db.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +136,23 @@ def init_db():
         )
     ''')
     
-    # Készletmozgások tábla (minden változás naplózása)
+    # === ÚJ: Helyszín-specifikus készlet tábla ===
+    # Ez a központi készletnyilvántartás: Product × Location = Quantity
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS location_inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            location_id INTEGER NOT NULL,
+            quantity REAL NOT NULL DEFAULT 0,
+            min_stock_level REAL DEFAULT 0,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id),
+            FOREIGN KEY (location_id) REFERENCES locations(id),
+            UNIQUE(product_id, location_id)
+        )
+    ''')
+    
+    # Készletmozgások tábla - KIBŐVÍTVE helyszín támogatással
     db.execute('''
         CREATE TABLE IF NOT EXISTS inventory_movements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,11 +161,22 @@ def init_db():
             quantity_change REAL NOT NULL,
             quantity_before REAL NOT NULL,
             quantity_after REAL NOT NULL,
+            location_id INTEGER,
+            source_location_id INTEGER,
+            target_location_id INTEGER,
+            reference_movement_id INTEGER,
             note TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products(id)
+            FOREIGN KEY (product_id) REFERENCES products(id),
+            FOREIGN KEY (location_id) REFERENCES locations(id),
+            FOREIGN KEY (source_location_id) REFERENCES locations(id),
+            FOREIGN KEY (target_location_id) REFERENCES locations(id),
+            FOREIGN KEY (reference_movement_id) REFERENCES inventory_movements(id)
         )
     ''')
+    
+    # Migráció: helyszín oszlopok hozzáadása a meglévő inventory_movements táblához
+    _migrate_inventory_movements(db)
     
     # Audit log tábla (minden változás követése)
     db.execute('''
@@ -130,10 +194,95 @@ def init_db():
     # Alapértelmezett adatok beszúrása (ha még nem léteznek)
     _insert_default_data(db)
     
+    # Alapértelmezett helyszínek létrehozása
+    _insert_default_locations(db)
+    
+    # Meglévő készlet migrálása az alapértelmezett raktárba
+    _migrate_existing_inventory(db)
+    
     db.commit()
     
     # Teardown regisztrálása
     current_app.teardown_appcontext(close_db_connection)
+
+
+def _migrate_inventory_movements(db):
+    """Migráció: helyszín oszlopok hozzáadása a meglévő inventory_movements táblához"""
+    columns_to_add = [
+        ('location_id', 'INTEGER'),
+        ('source_location_id', 'INTEGER'),
+        ('target_location_id', 'INTEGER'),
+        ('reference_movement_id', 'INTEGER')
+    ]
+    
+    for column_name, column_type in columns_to_add:
+        try:
+            db.execute(f'ALTER TABLE inventory_movements ADD COLUMN {column_name} {column_type}')
+        except sqlite3.OperationalError:
+            # Oszlop már létezik
+            pass
+
+
+def _insert_default_locations(db):
+    """Alapértelmezett helyszínek létrehozása"""
+    
+    # Ellenőrizzük, hogy vannak-e már helyszínek
+    existing = db.execute('SELECT COUNT(*) as cnt FROM locations').fetchone()
+    if existing['cnt'] > 0:
+        return
+    
+    # Alapértelmezett helyszínek
+    default_locations = [
+        ('Központi Raktár', 'WAREHOUSE', 'Főraktár a termékek tárolására', None),
+        ('Autó #1', 'CAR', 'Szállító jármű automata feltöltéshez', None),
+    ]
+    
+    for name, loc_type, description, address in default_locations:
+        db.execute('''
+            INSERT INTO locations (name, location_type, description, address)
+            VALUES (?, ?, ?, ?)
+        ''', (name, loc_type, description, address))
+    
+    db.commit()
+
+
+def _migrate_existing_inventory(db):
+    """Meglévő készlet migrálása az alapértelmezett raktárba"""
+    
+    # Alapértelmezett raktár ID lekérdezése
+    warehouse = db.execute('''
+        SELECT id FROM locations WHERE location_type = 'WAREHOUSE' AND is_deleted = 0 LIMIT 1
+    ''').fetchone()
+    
+    if not warehouse:
+        return
+    
+    warehouse_id = warehouse['id']
+    
+    # Meglévő készlet a régi inventory táblából
+    old_inventory = db.execute('SELECT product_id, quantity FROM inventory').fetchall()
+    
+    for item in old_inventory:
+        # Ellenőrizzük, hogy már migrálva van-e
+        existing = db.execute('''
+            SELECT id FROM location_inventory 
+            WHERE product_id = ? AND location_id = ?
+        ''', (item['product_id'], warehouse_id)).fetchone()
+        
+        if not existing:
+            db.execute('''
+                INSERT INTO location_inventory (product_id, location_id, quantity)
+                VALUES (?, ?, ?)
+            ''', (item['product_id'], warehouse_id, item['quantity']))
+    
+    # Régi mozgásokhoz is beállítjuk a helyszínt
+    db.execute('''
+        UPDATE inventory_movements 
+        SET location_id = ? 
+        WHERE location_id IS NULL
+    ''', (warehouse_id,))
+    
+    db.commit()
 
 
 def _insert_default_data(db):
@@ -178,6 +327,14 @@ def _insert_default_data(db):
             )
         except sqlite3.IntegrityError:
             pass
+    
+    # Alapértelmezett jelszó beállítása ha még nincs (hash-elve)
+    existing_password = db.execute('SELECT value FROM settings WHERE key = ?', ('app_password',)).fetchone()
+    if not existing_password:
+        default_password_hash = generate_password_hash('leltar2024')
+        db.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('app_password', default_password_hash))
+    
+    db.commit()
 
 
 def log_audit(table_name, record_id, action, old_values=None, new_values=None):

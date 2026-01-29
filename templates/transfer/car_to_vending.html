@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Automata töltés - Edibes Leltár{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Mobil-optimalizált stílusok */
+@media (max-width: 768px) {
+    .mobile-card {
+        margin: -1rem;
+        border-radius: 0;
+    }
+    .mobile-btn {
+        min-height: 60px;
+        font-size: 1.2rem;
+    }
+    .product-item {
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+    }
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.5rem;
+}
+
+.product-tile {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.product-tile:hover, .product-tile.selected {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+}
+
+.product-tile .qty {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.quantity-buttons .btn {
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4">
+    <!-- Fejléc - kompakt mobilon -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">
+                <i class="bi bi-box-seam me-2"></i>Automata töltés
+            </h4>
+            <small class="text-muted">Autó → Automata</small>
+        </div>
+        <a href="{{ url_for('transfer.transfer_home') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+    </div>
+    
+    <!-- Helyszín választók -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-truck me-1"></i>Autó
+                    </label>
+                    <select class="form-select form-select-lg" id="source_location_id" onchange="updateSource()">
+                        {% for car in cars %}
+                        <option value="{{ car.id }}" {{ 'selected' if selected_source == car.id }}>
+                            {{ car.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-box-seam me-1"></i>Automata
+                    </label>
+                    <select class="form-select form-select-lg" id="target_location_id">
+                        <option value="">Válasszon...</option>
+                        {% for vm in vendings %}
+                        <option value="{{ vm.id }}" {{ 'selected' if selected_target == vm.id }}>
+                            {{ vm.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vonalkód kereső / kamera -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-white">
+                    <i class="bi bi-upc-scan"></i>
+                </span>
+                <input type="text" class="form-control" id="barcode_input" 
+                       placeholder="Vonalkód beírása/beolvasása" autofocus>
+                <button type="button" class="btn btn-primary" id="cameraBtn" onclick="toggleCamera()">
+                    <i class="bi bi-camera"></i>
+                </button>
+            </div>
+            
+            <!-- Kamera előnézet -->
+            <div id="cameraPreview" class="mt-3 d-none">
+                <div id="reader" style="width: 100%;"></div>
+                <button type="button" class="btn btn-secondary w-100 mt-2" onclick="stopCamera()">
+                    <i class="bi bi-x-lg me-1"></i>Kamera leállítása
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Kiválasztott termék és mennyiség -->
+    <div class="card border-0 shadow-sm mb-3" id="selectedProductCard" style="display: none;">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-0" id="selectedProductName">-</h5>
+                    <small class="text-muted" id="selectedProductInfo">-</small>
+                </div>
+                <button type="button" class="btn btn-outline-secondary" onclick="clearSelection()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Mennyiség - nagy gombok mobilra -->
+            <div class="d-flex align-items-center justify-content-center gap-3 quantity-buttons">
+                <button type="button" class="btn btn-outline-danger rounded-circle" onclick="adjustQty(-1)">
+                    <i class="bi bi-dash-lg"></i>
+                </button>
+                <input type="number" class="form-control form-control-lg text-center" 
+                       id="quantity" value="1" min="1" style="width: 100px; font-size: 2rem;">
+                <button type="button" class="btn btn-outline-success rounded-circle" onclick="adjustQty(1)">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Gyors mennyiségek -->
+            <div class="d-flex gap-2 justify-content-center mt-3">
+                {% for n in [5, 10, 20, 50] %}
+                <button type="button" class="btn btn-outline-secondary" onclick="setQty({{ n }})">{{ n }}</button>
+                {% endfor %}
+            </div>
+            
+            <!-- Áthelyezés gomb -->
+            <button type="button" class="btn btn-success btn-lg w-100 mt-3 mobile-btn" 
+                    id="transferBtn" onclick="executeTransfer()">
+                <i class="bi bi-arrow-right-circle me-2"></i>Áthelyezés
+            </button>
+        </div>
+    </div>
+    
+    <!-- Termék lista - rács mobilon -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <span class="fw-bold">Autóban lévő termékek</span>
+            <span class="badge bg-secondary float-end">{{ products|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if products %}
+            <div class="product-grid">
+                {% for prod in products %}
+                <div class="product-tile" onclick="selectProductTile(this, {{ prod.id }}, '{{ prod.name }}', {{ prod.available_quantity }})"
+                     data-product-id="{{ prod.id }}">
+                    <div class="small text-muted text-truncate">{{ prod.name }}</div>
+                    <div class="qty text-{{ 'danger' if prod.available_quantity < 5 else 'success' }}">
+                        {{ prod.available_quantity|int }}
+                    </div>
+                    <div class="small">{{ prod.unit_abbr or 'db' }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-inbox display-1"></i>
+                <p class="mt-2">Nincs termék az autóban</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Toast értesítések -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="resultToast" class="toast" role="alert">
+        <div class="toast-body fs-5" id="toastMessage"></div>
+    </div>
+</div>
+
+<!-- html5-qrcode library -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+let html5QrCode = null;
+let selectedProductId = null;
+let availableStock = 0;
+
+// Vonalkód input kezelés
+document.getElementById('barcode_input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchByBarcode(this.value.trim());
+        this.value = '';
+    }
+});
+
+function searchByBarcode(barcode) {
+    if (!barcode) return;
+    
+    const sourceId = document.getElementById('source_location_id').value;
+    
+    fetch(`/transfer/api/product-by-barcode/${barcode}?location_id=${sourceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                selectProduct(data.product.id, data.product.name, data.product.available_quantity || 0);
+                stopCamera();
+            } else {
+                showToast('Termék nem található!', 'danger');
+            }
+        })
+        .catch(err => {
+            showToast('Hiba a keresés során', 'danger');
+        });
+}
+
+function selectProduct(id, name, stock) {
+    selectedProductId = id;
+    availableStock = stock;
+    
+    document.getElementById('selectedProductName').textContent = name;
+    document.getElementById('selectedProductInfo').textContent = `Elérhető: ${stock} db`;
+    document.getElementById('selectedProductCard').style.display = 'block';
+    document.getElementById('quantity').value = 1;
+    document.getElementById('quantity').max = stock;
+    
+    // Jelölés a listában
+    document.querySelectorAll('.product-tile').forEach(t => t.classList.remove('selected'));
+    const tile = document.querySelector(`.product-tile[data-product-id="${id}"]`);
+    if (tile) tile.classList.add('selected');
+}
+
+function selectProductTile(elem, id, name, stock) {
+    selectProduct(id, name, stock);
+}
+
+function clearSelection() {
+    selectedProductId = null;
+    document.getElementById('selectedProductCard').style.display = 'none';
+    document.querySelectorAll('.product-tile').forEach(t => t.classList.remove('selected'));
+}
+
+function adjustQty(delta) {
+    const input = document.getElementById('quantity');
+    const newVal = Math.max(1, Math.min(availableStock, parseInt(input.value) + delta));
+    input.value = newVal;
+}
+
+function setQty(val) {
+    const input = document.getElementById('quantity');
+    input.value = Math.min(availableStock, val);
+}
+
+function executeTransfer() {
+    const sourceId = document.getElementById('source_location_id').value;
+    const targetId = document.getElementById('target_location_id').value;
+    const quantity = parseInt(document.getElementById('quantity').value);
+    
+    if (!targetId) {
+        showToast('Válasszon automatát!', 'warning');
+        return;
+    }
+    
+    if (!selectedProductId) {
+        showToast('Válasszon terméket!', 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('transferBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Folyamatban...';
+    
+    fetch('/transfer/api/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            source_location_id: parseInt(sourceId),
+            target_location_id: parseInt(targetId),
+            product_id: selectedProductId,
+            quantity: quantity
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            
+            // Frissítjük a készletet a csempén
+            const tile = document.querySelector(`.product-tile[data-product-id="${selectedProductId}"]`);
+            if (tile) {
+                const newStock = data.new_source_stock;
+                tile.querySelector('.qty').textContent = newStock;
+                availableStock = newStock;
+                document.getElementById('selectedProductInfo').textContent = `Elérhető: ${newStock} db`;
+                
+                if (newStock === 0) {
+                    tile.remove();
+                    clearSelection();
+                }
+            }
+            
+            // Készülünk a következő olvasásra
+            document.getElementById('barcode_input').focus();
+        } else {
+            showToast(data.error, 'danger');
+        }
+    })
+    .catch(err => {
+        showToast('Hiba történt!', 'danger');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-right-circle me-2"></i>Áthelyezés';
+    });
+}
+
+// Kamera kezelés
+function toggleCamera() {
+    const preview = document.getElementById('cameraPreview');
+    if (preview.classList.contains('d-none')) {
+        startCamera();
+    } else {
+        stopCamera();
+    }
+}
+
+async function startCamera() {
+    const preview = document.getElementById('cameraPreview');
+    preview.classList.remove('d-none');
+    
+    html5QrCode = new Html5Qrcode("reader");
+    
+    const config = { 
+        fps: 10, 
+        qrbox: { width: 250, height: 150 },
+        aspectRatio: 1.5
+    };
+    
+    try {
+        await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+                searchByBarcode(decodedText);
+            },
+            (errorMessage) => {}
+        );
+    } catch (err) {
+        console.error('Kamera hiba:', err);
+        showToast('Nem sikerült a kamerát elindítani', 'danger');
+        preview.classList.add('d-none');
+    }
+}
+
+async function stopCamera() {
+    const preview = document.getElementById('cameraPreview');
+    
+    if (html5QrCode && html5QrCode.isScanning) {
+        try {
+            await html5QrCode.stop();
+        } catch (err) {
+            console.error('Kamera leállítási hiba:', err);
+        }
+    }
+    
+    preview.classList.add('d-none');
+}
+
+function updateSource() {
+    const sourceId = document.getElementById('source_location_id').value;
+    const targetId = document.getElementById('target_location_id').value;
+    window.location.href = `/transfer/car-to-vending?source=${sourceId}&target=${targetId}`;
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('resultToast');
+    const toastBody = document.getElementById('toastMessage');
+    
+    toast.className = `toast bg-${type} text-white`;
+    toastBody.textContent = message;
+    
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+}
+</script>
+{% endblock %}

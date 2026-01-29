@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Gyors áthelyezés - Edibes Leltár{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Teljes képernyős mobil nézet */
+body {
+    background: #f8f9fa;
+}
+
+.quick-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+    color: white;
+    padding: 1rem;
+    margin: -1rem -1rem 1rem -1rem;
+}
+
+.scan-area {
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 250px;
+}
+
+.product-result {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.big-button {
+    min-height: 80px;
+    font-size: 1.5rem;
+    border-radius: 12px;
+}
+
+.qty-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.qty-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qty-input {
+    width: 120px;
+    height: 80px;
+    font-size: 3rem;
+    text-align: center;
+    border: 2px solid #ddd;
+    border-radius: 12px;
+}
+
+.recent-item {
+    background: white;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.flash-success {
+    animation: flash-green 0.5s ease-out;
+}
+
+@keyframes flash-green {
+    0% { background: #198754; }
+    100% { background: transparent; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3">
+    <!-- Kompakt fejléc -->
+    <div class="quick-header text-center">
+        <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('transfer.transfer_home') }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <small class="opacity-75">
+                    <i class="bi bi-{{ LocationType.get_icon(source.location_type) }} me-1"></i>{{ source.name }}
+                    <i class="bi bi-arrow-right mx-2"></i>
+                    <i class="bi bi-{{ LocationType.get_icon(target.location_type) }} me-1"></i>{{ target.name }}
+                </small>
+            </div>
+            <span></span>
+        </div>
+    </div>
+    
+    <!-- Kamera / Vonalkód -->
+    <div class="scan-area mb-3" id="reader"></div>
+    
+    <!-- Manuális bevitel -->
+    <div class="input-group mb-3">
+        <input type="text" class="form-control form-control-lg" id="barcodeInput" 
+               placeholder="Vonalkód beírása..." autofocus>
+        <button class="btn btn-primary btn-lg" type="button" onclick="manualSearch()">
+            <i class="bi bi-search"></i>
+        </button>
+    </div>
+    
+    <!-- Termék eredmény -->
+    <div class="product-result p-4 mb-3 d-none" id="productResult">
+        <div class="text-center mb-3">
+            <h4 class="mb-1" id="productName">-</h4>
+            <small class="text-muted" id="productStock">Elérhető: -</small>
+        </div>
+        
+        <!-- Mennyiség -->
+        <div class="qty-control mb-4">
+            <button type="button" class="qty-btn btn btn-outline-danger" onclick="changeQty(-1)">
+                <i class="bi bi-dash"></i>
+            </button>
+            <input type="number" class="qty-input" id="qtyInput" value="1" min="1">
+            <button type="button" class="qty-btn btn btn-outline-success" onclick="changeQty(1)">
+                <i class="bi bi-plus"></i>
+            </button>
+        </div>
+        
+        <!-- Gyors mennyiségek -->
+        <div class="d-flex gap-2 justify-content-center mb-4">
+            <button class="btn btn-outline-secondary" onclick="setQty(5)">5</button>
+            <button class="btn btn-outline-secondary" onclick="setQty(10)">10</button>
+            <button class="btn btn-outline-secondary" onclick="setQty(20)">20</button>
+            <button class="btn btn-outline-secondary" onclick="setQty(50)">50</button>
+        </div>
+        
+        <!-- Áthelyezés gomb -->
+        <button type="button" class="btn btn-success big-button w-100" id="transferBtn" onclick="doTransfer()">
+            <i class="bi bi-check-circle me-2"></i>ÁTHELYEZÉS
+        </button>
+    </div>
+    
+    <!-- Utolsó áthelyezések -->
+    <div id="recentTransfers">
+        <h6 class="text-muted mb-2"><i class="bi bi-clock-history me-1"></i>Utolsó műveletek</h6>
+        <div id="recentList"></div>
+    </div>
+</div>
+
+<!-- Sikeres művelet hangjelzés -->
+<audio id="successSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleAAAtIvEwGNJLU6GycGcVh0AF6C84bN0Fw==" type="audio/wav">
+</audio>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+const SOURCE_ID = {{ source.id }};
+const TARGET_ID = {{ target.id }};
+let html5QrCode;
+let currentProduct = null;
+let maxStock = 0;
+
+// Kamera indítása
+async function initCamera() {
+    html5QrCode = new Html5Qrcode("reader");
+    
+    try {
+        await html5QrCode.start(
+            { facingMode: "environment" },
+            { 
+                fps: 10, 
+                qrbox: { width: 280, height: 140 },
+                aspectRatio: 2
+            },
+            onScanSuccess,
+            () => {}
+        );
+    } catch (err) {
+        document.getElementById('reader').innerHTML = 
+            '<div class="text-white text-center p-4"><i class="bi bi-camera-video-off display-1"></i><p>Kamera nem elérhető</p><p class="small">Használja a kézi bevitelt</p></div>';
+    }
+}
+
+function onScanSuccess(barcode) {
+    // Vibrálás ha támogatott
+    if (navigator.vibrate) navigator.vibrate(100);
+    
+    searchProduct(barcode);
+}
+
+function manualSearch() {
+    const barcode = document.getElementById('barcodeInput').value.trim();
+    if (barcode) {
+        searchProduct(barcode);
+        document.getElementById('barcodeInput').value = '';
+    }
+}
+
+document.getElementById('barcodeInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        manualSearch();
+    }
+});
+
+function searchProduct(barcode) {
+    fetch(`/transfer/api/product-by-barcode/${barcode}?location_id=${SOURCE_ID}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showProduct(data.product);
+            } else {
+                showError('Termék nem található!');
+            }
+        });
+}
+
+function showProduct(product) {
+    currentProduct = product;
+    maxStock = product.available_quantity || 0;
+    
+    document.getElementById('productName').textContent = product.name;
+    document.getElementById('productStock').textContent = `Elérhető: ${maxStock} db`;
+    document.getElementById('qtyInput').value = 1;
+    document.getElementById('qtyInput').max = maxStock;
+    document.getElementById('productResult').classList.remove('d-none');
+    
+    if (maxStock === 0) {
+        document.getElementById('transferBtn').disabled = true;
+        document.getElementById('productStock').classList.add('text-danger');
+    } else {
+        document.getElementById('transferBtn').disabled = false;
+        document.getElementById('productStock').classList.remove('text-danger');
+    }
+}
+
+function showError(msg) {
+    // Toast vagy alert
+    alert(msg);
+}
+
+function changeQty(delta) {
+    const input = document.getElementById('qtyInput');
+    const newVal = Math.max(1, Math.min(maxStock, parseInt(input.value) + delta));
+    input.value = newVal;
+}
+
+function setQty(val) {
+    document.getElementById('qtyInput').value = Math.min(maxStock, val);
+}
+
+function doTransfer() {
+    if (!currentProduct) return;
+    
+    const qty = parseInt(document.getElementById('qtyInput').value);
+    const btn = document.getElementById('transferBtn');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    fetch('/transfer/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            source_location_id: SOURCE_ID,
+            target_location_id: TARGET_ID,
+            product_id: currentProduct.id,
+            quantity: qty
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Sikeres
+            document.getElementById('successSound').play().catch(() => {});
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            
+            addRecentTransfer(currentProduct.name, qty);
+            
+            // Készlet frissítése
+            maxStock = data.new_source_stock;
+            document.getElementById('productStock').textContent = `Elérhető: ${maxStock} db`;
+            
+            if (maxStock === 0) {
+                document.getElementById('productResult').classList.add('d-none');
+                currentProduct = null;
+            }
+            
+            // Flash effekt
+            document.getElementById('productResult').classList.add('flash-success');
+            setTimeout(() => {
+                document.getElementById('productResult').classList.remove('flash-success');
+            }, 500);
+            
+        } else {
+            showError(data.error);
+        }
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>ÁTHELYEZÉS';
+    });
+}
+
+function addRecentTransfer(name, qty) {
+    const list = document.getElementById('recentList');
+    const item = document.createElement('div');
+    item.className = 'recent-item';
+    item.innerHTML = `
+        <span>${name}</span>
+        <span class="badge bg-success">${qty} db</span>
+    `;
+    list.insertBefore(item, list.firstChild);
+    
+    // Max 5 elem
+    while (list.children.length > 5) {
+        list.removeChild(list.lastChild);
+    }
+}
+
+// Indítás
+initCamera();
+</script>
+{% endblock %}

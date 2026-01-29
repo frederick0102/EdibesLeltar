@@ -3,11 +3,23 @@
 
 {% block title %}Mozgás napló - Edibes Leltár{% endblock %}
 
+{% block extra_css %}
+<style>
+    .location-badge-sm {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+    }
+    .location-warehouse { background-color: #e3f2fd; color: #1565c0; }
+    .location-car { background-color: #fff3e0; color: #e65100; }
+    .location-vending { background-color: #f3e5f5; color: #7b1fa2; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     {{ page_header(
         title='Készletmozgás napló',
-        subtitle='Minden készletváltozás nyomon követése',
+        subtitle='Minden készletváltozás nyomon követése - helyszín információkkal',
         icon='clock-history',
         button_text='Új mozgás',
         button_url=url_for('inventory.add_movement')
@@ -16,14 +28,25 @@
     <!-- Szűrők -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
-            <form method="GET" class="row g-3">
-                <div class="col-md-3">
+            <form method="GET" action="{{ url_for('inventory.movement_history') }}" class="row g-3">
+                <div class="col-md-2">
                     <label class="form-label">Termék</label>
                     <select class="form-select" name="product">
                         <option value="">Összes termék</option>
                         {% for product in products %}
-                        <option value="{{ product.id }}" {% if selected_product == product.id|string %}selected{% endif %}>
+                        <option value="{{ product.id }}" {% if selected_product == product.id %}selected{% endif %}>
                             {{ product.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Helyszín</label>
+                    <select class="form-select" name="location">
+                        <option value="">Összes helyszín</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.id }}" {% if selected_location == loc.id %}selected{% endif %}>
+                            {{ LocationType.get_icon(loc.location_type) }} {{ loc.name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -47,12 +70,12 @@
                     <label class="form-label">Dátum -ig</label>
                     <input type="date" class="form-control" name="date_to" value="{{ date_to }}">
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-outline-primary me-2">
                         <i class="bi bi-funnel me-1"></i>Szűrés
                     </button>
                     <a href="{{ url_for('inventory.movement_history') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-x me-1"></i>Törlés
+                        <i class="bi bi-x"></i>
                     </a>
                 </div>
             </form>
@@ -67,6 +90,7 @@
                     <tr>
                         <th>Időpont</th>
                         <th>Termék</th>
+                        <th>Helyszín</th>
                         <th>Típus</th>
                         <th class="text-end">Változás</th>
                         <th class="text-center">Előtte</th>
@@ -88,6 +112,24 @@
                                 url_for('inventory.movement_history', product=move.product_id)
                             ) }}
                         </td>
+                        <td>
+                            {% if move.source_location_name and move.target_location_name %}
+                            <!-- Áthelyezés -->
+                            <span class="location-badge-sm badge location-{{ move.source_location_type|lower if move.source_location_type else 'secondary' }}">
+                                {{ move.source_location_name }}
+                            </span>
+                            <i class="bi bi-arrow-right text-muted mx-1"></i>
+                            <span class="location-badge-sm badge location-{{ move.target_location_type|lower if move.target_location_type else 'secondary' }}">
+                                {{ move.target_location_name }}
+                            </span>
+                            {% elif move.location_name %}
+                            <span class="location-badge-sm badge location-{{ move.location_type|lower if move.location_type else 'secondary' }}">
+                                {{ LocationType.get_icon(move.location_type) if move.location_type else '' }} {{ move.location_name }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                         <td>{{ movement_badge(move.movement_type) }}</td>
                         <td class="text-end">
                             {{ quantity_change(move.quantity_change) }}
@@ -103,7 +145,7 @@
                         </td>
                     </tr>
                     {% else %}
-                    {{ empty_state('Nincs készletmozgás', 7, 'inbox') }}
+                    {{ empty_state('Nincs készletmozgás', 8, 'inbox') }}
                     {% endfor %}
                 </tbody>
             </table>
@@ -114,4 +156,20 @@
         <small>Megjelenítve: {{ movements|length }} mozgás (max. 500)</small>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit: select változáskor azonnal szűrés
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form[method="GET"]');
+    if (form) {
+        form.querySelectorAll('select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                form.submit();
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

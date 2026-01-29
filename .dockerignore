@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Tesztek
+tests
+*.test.py
+
+# Dokumentáció (nem szükséges a containerben)
+*.md
+!README.md
+
+# Lokális fájlok
+.env
+*.log
+*.sqlite3
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Backup és adat könyvtárak (ezek volume-ként csatolódnak)
+data/
+backups/
+
+# Scripts
+*.ps1
+reset_password.py
+seed_demo_data.py

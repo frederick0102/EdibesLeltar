@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Autó kiadás - Edibes Leltár{% endblock %}
+
+{% block extra_css %}
+<style>
+    .product-tile {
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+    }
+    .product-tile:hover {
+        border-color: #dc3545;
+        transform: scale(1.02);
+    }
+    .product-tile.selected {
+        border-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    .product-tile .quantity {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    .quantity-btn {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+        border-radius: 50%;
+    }
+    .quick-qty-btn {
+        min-width: 50px;
+    }
+    @media (max-width: 576px) {
+        .quantity-btn {
+            width: 70px;
+            height: 70px;
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Autó kiadás',
+        subtitle='Termék kivétele az autóból (fogyasztás)',
+        icon='box-arrow-up'
+    ) }}
+    
+    <div class="row">
+        <!-- Bal oldal: Autó választás és termékek -->
+        <div class="col-lg-8">
+            <!-- Autó választó -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">
+                        <i class="bi bi-truck text-danger me-2"></i>Autó kiválasztása
+                    </h5>
+                    <div class="row g-2">
+                        {% for car in cars %}
+                        <div class="col-auto">
+                            <a href="{{ url_for('transfer.car_consumption', source=car.id) }}" 
+                               class="btn {% if selected_source == car.id %}btn-danger{% else %}btn-outline-danger{% endif %} btn-lg">
+                                <i class="bi bi-truck me-1"></i>{{ car.name }}
+                            </a>
+                        </div>
+                        {% else %}
+                        <div class="col-12">
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Nincs regisztrált autó. 
+                                <a href="{{ url_for('locations.create_location') }}">Hozzon létre egyet!</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Termékek grid -->
+            {% if products %}
+            <h5 class="mb-3"><i class="bi bi-box me-2"></i>Készleten lévő termékek</h5>
+            <div class="row g-3">
+                {% for product in products %}
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card product-tile h-100" 
+                         data-product-id="{{ product.id }}"
+                         data-product-name="{{ product.name }}"
+                         data-available="{{ product.available_quantity }}"
+                         onclick="selectProduct(this)">
+                        <div class="card-body text-center p-3">
+                            <div class="quantity text-danger">{{ "%.0f"|format(product.available_quantity) }}</div>
+                            <small class="text-muted d-block mb-1">db</small>
+                            <strong class="d-block text-truncate" title="{{ product.name }}">
+                                {{ product.name }}
+                            </strong>
+                            {% if product.package_size %}
+                            <small class="text-muted">{{ product.package_size }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                {% if selected_source %}
+                Nincs készlet az autóban. Töltse fel a raktárból!
+                {% else %}
+                Válasszon autót a termékek megjelenítéséhez.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Jobb oldal: Kiadás panel -->
+        <div class="col-lg-4">
+            <div class="card border-danger shadow-sm sticky-lg-top" style="top: 80px;">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-box-arrow-up me-2"></i>Termék kiadás</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="consumptionForm">
+                        <input type="hidden" name="source_location_id" value="{{ selected_source }}">
+                        <input type="hidden" name="product_id" id="selectedProductId">
+                        
+                        <div class="selected-product-info mb-3" id="selectedProductInfo" style="display: none;">
+                            <div class="alert alert-light border">
+                                <strong id="selectedProductName">-</strong>
+                                <div class="text-muted">
+                                    Elérhető: <span id="selectedProductAvailable">0</span> db
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="noProductSelected">
+                            <div class="alert alert-secondary">
+                                <i class="bi bi-hand-index me-2"></i>Válasszon terméket a listából
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Kiadandó mennyiség</label>
+                            <div class="d-flex justify-content-center align-items-center gap-3">
+                                <button type="button" class="btn btn-outline-danger quantity-btn" onclick="adjustQty(-1)">
+                                    <i class="bi bi-dash-lg"></i>
+                                </button>
+                                <input type="number" class="form-control form-control-lg text-center" 
+                                       name="quantity" id="quantityInput" value="1" min="1" 
+                                       style="max-width: 100px; font-size: 1.5rem;">
+                                <button type="button" class="btn btn-outline-danger quantity-btn" onclick="adjustQty(1)">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Gyors mennyiség gombok -->
+                        <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
+                            <button type="button" class="btn btn-outline-secondary quick-qty-btn" onclick="setQty(1)">1</button>
+                            <button type="button" class="btn btn-outline-secondary quick-qty-btn" onclick="setQty(5)">5</button>
+                            <button type="button" class="btn btn-outline-secondary quick-qty-btn" onclick="setQty(10)">10</button>
+                            <button type="button" class="btn btn-outline-secondary quick-qty-btn" onclick="setQty(20)">20</button>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Megjegyzés (opcionális)</label>
+                            <input type="text" class="form-control" name="note" placeholder="pl. Automata #123">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-danger btn-lg w-100" id="submitBtn" disabled>
+                            <i class="bi bi-box-arrow-up me-2"></i>Kiadás
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Vissza link -->
+            <div class="text-center mt-3">
+                <a href="{{ url_for('transfer.transfer_home') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Vissza az áthelyezéshez
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedProduct = null;
+
+function selectProduct(element) {
+    // Előző kijelölés törlése
+    document.querySelectorAll('.product-tile').forEach(el => el.classList.remove('selected'));
+    
+    // Új kijelölés
+    element.classList.add('selected');
+    
+    selectedProduct = {
+        id: element.dataset.productId,
+        name: element.dataset.productName,
+        available: parseFloat(element.dataset.available)
+    };
+    
+    // Form frissítése
+    document.getElementById('selectedProductId').value = selectedProduct.id;
+    document.getElementById('selectedProductName').textContent = selectedProduct.name;
+    document.getElementById('selectedProductAvailable').textContent = Math.floor(selectedProduct.available);
+    
+    document.getElementById('selectedProductInfo').style.display = 'block';
+    document.getElementById('noProductSelected').style.display = 'none';
+    document.getElementById('submitBtn').disabled = false;
+    
+    // Mennyiség max beállítása
+    document.getElementById('quantityInput').max = selectedProduct.available;
+    document.getElementById('quantityInput').value = 1;
+}
+
+function adjustQty(delta) {
+    const input = document.getElementById('quantityInput');
+    let value = parseInt(input.value) || 0;
+    value = Math.max(1, value + delta);
+    
+    if (selectedProduct && value > selectedProduct.available) {
+        value = Math.floor(selectedProduct.available);
+    }
+    
+    input.value = value;
+}
+
+function setQty(value) {
+    const input = document.getElementById('quantityInput');
+    
+    if (selectedProduct && value > selectedProduct.available) {
+        value = Math.floor(selectedProduct.available);
+    }
+    
+    input.value = Math.max(1, value);
+}
+
+// Form ellenőrzés
+document.getElementById('consumptionForm').addEventListener('submit', function(e) {
+    if (!selectedProduct) {
+        e.preventDefault();
+        alert('Válasszon terméket!');
+        return;
+    }
+    
+    const qty = parseInt(document.getElementById('quantityInput').value);
+    if (qty > selectedProduct.available) {
+        e.preventDefault();
+        alert('Nincs elegendő készlet!');
+        return;
+    }
+});
+</script>
+{% endblock %}

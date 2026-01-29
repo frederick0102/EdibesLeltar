@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Beállítások - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Beállítások',
+        subtitle='Alkalmazás beállítások és jelszó módosítás',
+        icon='gear'
+    ) }}
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <!-- Jelszó módosítás -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-key me-2"></i>Jelszó módosítása
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('auth.settings') }}">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">
+                                Jelenlegi jelszó <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                <input type="password" class="form-control" id="current_password" 
+                                       name="current_password" required autocomplete="current-password">
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">
+                                Új jelszó <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-key"></i></span>
+                                <input type="password" class="form-control" id="new_password" 
+                                       name="new_password" required minlength="4" autocomplete="new-password">
+                            </div>
+                            <div class="form-text">Minimum 4 karakter</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="confirm_password" class="form-label">
+                                Új jelszó megerősítése <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
+                                <input type="password" class="form-control" id="confirm_password" 
+                                       name="confirm_password" required minlength="4" autocomplete="new-password">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-lg me-1"></i>Jelszó módosítása
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Verzió info -->
+            <div class="card border-0 shadow-sm mt-4 bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-info-circle me-1"></i>Alkalmazás információ
+                    </h6>
+                    <ul class="list-unstyled mb-0 small">
+                        <li class="mb-2">
+                            <i class="bi bi-app me-1"></i>
+                            Verzió: <strong>{{ config.APP_VERSION }}</strong>
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-database me-1"></i>
+                            Adatbázis: <code>{{ db_name }}</code>
+                        </li>
+                        <li>
+                            <i class="bi bi-calendar me-1"></i>
+                            <span id="current-datetime"></span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Dátum/idő megjelenítése
+document.getElementById('current-datetime').textContent = new Date().toLocaleString('hu-HU');
+</script>
+{% endblock %}

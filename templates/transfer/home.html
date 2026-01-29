@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Áthelyezés - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Készlet áthelyezés',
+        subtitle='Válasszon munkafolyamatot',
+        icon='arrow-left-right'
+    ) }}
+    
+    <div class="row justify-content-center">
+        <!-- Raktár -> Autó -->
+        <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
+                <div class="card-body text-center p-4">
+                    <div class="mb-4">
+                        <span class="badge bg-success rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-building me-1"></i>Raktár
+                        </span>
+                        <i class="bi bi-arrow-right fs-4 mx-2 text-muted"></i>
+                        <span class="badge bg-info rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-truck me-1"></i>Autó
+                        </span>
+                    </div>
+                    
+                    <h4 class="card-title">Autó feltöltése</h4>
+                    <p class="card-text text-muted">
+                        Termékek áthelyezése a központi raktárból a szállító autóba.
+                    </p>
+                    
+                    <a href="{{ url_for('transfer.warehouse_to_car') }}" 
+                       class="btn btn-lg btn-success stretched-link">
+                        <i class="bi bi-box-arrow-right me-2"></i>Indítás
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Autó -> Automata -->
+        <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
+                <div class="card-body text-center p-4">
+                    <div class="mb-4">
+                        <span class="badge bg-info rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-truck me-1"></i>Autó
+                        </span>
+                        <i class="bi bi-arrow-right fs-4 mx-2 text-muted"></i>
+                        <span class="badge bg-warning rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-box-seam me-1"></i>Automata
+                        </span>
+                    </div>
+                    
+                    <h4 class="card-title">Automata töltés</h4>
+                    <p class="card-text text-muted">
+                        Termékek feltöltése az automatába a szállító autóból.
+                    </p>
+                    
+                    <a href="{{ url_for('transfer.car_to_vending') }}" 
+                       class="btn btn-lg btn-info stretched-link">
+                        <i class="bi bi-box-arrow-in-down me-2"></i>Indítás
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Autó kiadás (fogyasztás) -->
+        <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
+                <div class="card-body text-center p-4">
+                    <div class="mb-4">
+                        <span class="badge bg-info rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-truck me-1"></i>Autó
+                        </span>
+                        <i class="bi bi-arrow-right fs-4 mx-2 text-muted"></i>
+                        <span class="badge bg-danger rounded-pill px-3 py-2 fs-6">
+                            <i class="bi bi-box-arrow-up me-1"></i>Ki
+                        </span>
+                    </div>
+                    
+                    <h4 class="card-title">Autó kiadás</h4>
+                    <p class="card-text text-muted">
+                        Termék kivétele az autóból cél nélkül (fogyasztás).
+                    </p>
+                    
+                    <a href="{{ url_for('transfer.car_consumption') }}" 
+                       class="btn btn-lg btn-danger stretched-link">
+                        <i class="bi bi-box-arrow-up me-2"></i>Indítás
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gyors áthelyezés -->
+        <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
+                <div class="card-body text-center p-4">
+                    <div class="mb-4">
+                        <i class="bi bi-qr-code-scan display-4 text-primary"></i>
+                    </div>
+                    
+                    <h4 class="card-title">Vonalkódos töltés</h4>
+                    <p class="card-text text-muted">
+                        Mobilbarát felület kamera vonalkód olvasóval.
+                    </p>
+                    
+                    {% if cars and vendings %}
+                    <a href="{{ url_for('transfer.quick_transfer_page', source_id=cars[0].id, target_id=vendings[0].id if vendings else cars[0].id) }}" 
+                       class="btn btn-lg btn-primary stretched-link">
+                        <i class="bi bi-camera me-2"></i>Kamera indítás
+                    </a>
+                    {% else %}
+                    <button class="btn btn-lg btn-secondary" disabled>
+                        <i class="bi bi-exclamation-triangle me-2"></i>Nincs beállított helyszín
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gyors helyszín összefoglaló -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <h5 class="text-muted mb-3"><i class="bi bi-geo-alt me-2"></i>Helyszínek összefoglaló</h5>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">Raktárak</h6>
+                    <h3 class="card-title mb-0">{{ warehouses|length }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">Autók</h6>
+                    <h3 class="card-title mb-0">{{ cars|length }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">Automaták</h6>
+                    <h3 class="card-title mb-0">{{ vendings|length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Utolsó áthelyezések link -->
+    <div class="text-center mt-4">
+        <a href="{{ url_for('transfer.transfer_history') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-clock-history me-2"></i>Áthelyezések története
+        </a>
+    </div>
+</div>
+
+<style>
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+}
+</style>
+{% endblock %}

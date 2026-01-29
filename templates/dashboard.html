@@ -3,6 +3,27 @@
 
 {% block title %}Főoldal - Edibes Leltár{% endblock %}
 
+{% block extra_css %}
+<style>
+    .location-card {
+        transition: transform 0.2s;
+    }
+    .location-card:hover {
+        transform: translateY(-2px);
+    }
+    .location-icon {
+        font-size: 2rem;
+    }
+    .location-warehouse { border-left: 4px solid #1565c0; }
+    .location-car { border-left: 4px solid #e65100; }
+    .location-vending { border-left: 4px solid #7b1fa2; }
+    .movement-location-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <!-- Üdvözlő fejléc -->
@@ -11,24 +32,74 @@
             <h1 class="display-6">
                 <i class="bi bi-speedometer2 me-2"></i>Készlet Összegző
             </h1>
-            <p class="text-muted">Aktuális készletállapot és statisztikák</p>
+            <p class="text-muted">Aktuális készletállapot és statisztikák - helyszínenkénti bontással</p>
         </div>
     </div>
     
     <!-- Statisztika kártyák -->
     <div class="row g-4 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             {{ stat_card('Összes termék', stats.total_products, 'box', 'primary') }}
         </div>
         
-        <div class="col-md-4">
+        <div class="col-md-3">
             {{ stat_card('Összes készlet', "%.0f"|format(stats.total_quantity), 'boxes', 'success') }}
         </div>
         
-        <div class="col-md-4">
+        <div class="col-md-3">
+            {{ stat_card('Helyszínek', stats.location_count, 'geo-alt', 'info') }}
+        </div>
+        
+        <div class="col-md-3">
             {{ stat_card('Alacsony készlet', stats.low_stock_count, 'exclamation-triangle', 
                 'warning' if stats.low_stock_count > 0 else 'secondary', 
                 stats.low_stock_count > 0) }}
+        </div>
+    </div>
+    
+    <!-- HELYSZÍNENKÉNTI ÖSSZESÍTÉS - Új szekció -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-geo-alt text-primary me-2"></i>Készlet helyszínenként
+                    </h5>
+                    <a href="{{ url_for('locations.list_locations') }}" class="btn btn-sm btn-outline-primary">
+                        Helyszínek kezelése
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% for loc in location_stats %}
+                        <div class="col-md-4 col-lg-3">
+                            <div class="card h-100 location-card location-{{ loc.location_type|lower }}">
+                                <div class="card-body text-center">
+                                    <div class="location-icon mb-2">
+                                        {{ LocationType.get_icon(loc.location_type) }}
+                                    </div>
+                                    <h6 class="card-title mb-1">{{ loc.name }}</h6>
+                                    <small class="text-muted d-block mb-2">{{ LocationType.get_label(loc.location_type) }}</small>
+                                    <div class="display-6 fw-bold text-primary">{{ "%.0f"|format(loc.total_quantity) }}</div>
+                                    <small class="text-muted">{{ loc.product_count }} terméktípus</small>
+                                </div>
+                                <div class="card-footer bg-transparent border-0 text-center pb-3">
+                                    <a href="{{ url_for('inventory.list_inventory', location=loc.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye me-1"></i>Készlet
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="col-12 text-center text-muted py-4">
+                            <i class="bi bi-geo-alt fs-1"></i>
+                            <div class="mt-2">Nincsenek helyszínek</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -96,7 +167,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Termék</th>
-                                    <th class="text-end">Jelenlegi</th>
+                                    <th class="text-end">Össz. készlet</th>
                                     <th class="text-end">Minimum</th>
                                 </tr>
                             </thead>
@@ -152,6 +223,7 @@
                                 <tr>
                                     <th>Időpont</th>
                                     <th>Termék</th>
+                                    <th>Helyszín</th>
                                     <th>Típus</th>
                                     <th class="text-end">Mennyiség</th>
                                     <th>Megjegyzés</th>
@@ -166,6 +238,27 @@
                                     <td>
                                         {{ product_name(move.product_name, move.package_size, move.unit) }}
                                     </td>
+                                    <td>
+                                        {% if move.source_location_name and move.target_location_name %}
+                                        <!-- Áthelyezés -->
+                                        <span class="movement-location-badge badge bg-light text-dark">
+                                            {{ move.source_location_name }}
+                                        </span>
+                                        <i class="bi bi-arrow-right text-muted mx-1"></i>
+                                        <span class="movement-location-badge badge bg-light text-dark">
+                                            {{ move.target_location_name }}
+                                        </span>
+                                        {% elif move.location_name %}
+                                        <span class="movement-location-badge badge 
+                                            {% if move.location_type == 'WAREHOUSE' %}bg-primary
+                                            {% elif move.location_type == 'CAR' %}bg-warning text-dark
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ LocationType.get_icon(move.location_type) }} {{ move.location_name }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ movement_badge(move.movement_type) }}</td>
                                     <td class="text-end">
                                         {{ quantity_change(move.quantity_change) }}
@@ -175,7 +268,7 @@
                                     </td>
                                 </tr>
                                 {% else %}
-                                {{ empty_state('Nincs készletmozgás', 5) }}
+                                {{ empty_state('Nincs készletmozgás', 6) }}
                                 {% endfor %}
                             </tbody>
                         </table>

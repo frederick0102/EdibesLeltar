@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, movement_badge, empty_state %}
+
+{% block title %}{{ location.name }} készlet - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Fejléc helyszín infóval -->
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('locations.list_locations') }}">Helyszínek</a></li>
+                    <li class="breadcrumb-item active">{{ location.name }}</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex align-items-center">
+                <span class="badge bg-{{ 'success' if location.location_type == 'WAREHOUSE' else ('info' if location.location_type == 'CAR' else 'warning') }} fs-5 me-3">
+                    <i class="bi bi-{{ LocationType.get_icon(location.location_type) }} me-1"></i>
+                    {{ LocationType.get_label(location.location_type) }}
+                </span>
+                <h2 class="mb-0">{{ location.name }}</h2>
+            </div>
+            {% if location.description %}
+            <p class="text-muted mt-2 mb-0">{{ location.description }}</p>
+            {% endif %}
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('locations.edit_location', id=location.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>Szerkesztés
+            </a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Készlet lista -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-boxes me-2"></i>Készlet ({{ inventory|length }} termék)
+                    </h5>
+                </div>
+                
+                {% if inventory %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Termék</th>
+                                <th>Kategória</th>
+                                <th class="text-end">Mennyiség</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in inventory %}
+                            <tr>
+                                <td>
+                                    <strong>{{ item.product_name }}</strong>
+                                    {% if item.package_size %}
+                                    <small class="text-muted">({{ item.package_size }})</small>
+                                    {% endif %}
+                                    {% if item.barcode %}
+                                    <br><small class="text-muted font-monospace">[{{ item.barcode }}]</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.category_name %}
+                                    <span class="badge bg-secondary">{{ item.category_name }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <span class="fs-5 fw-bold {{ 'text-danger' if item.quantity < item.min_stock_level else 'text-success' }}">
+                                        {{ item.quantity|int }}
+                                    </span>
+                                    <small class="text-muted">{{ item.unit_abbr or 'db' }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">Nincs készlet ezen a helyszínen</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Utolsó mozgások -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Utolsó mozgások
+                    </h5>
+                </div>
+                
+                {% if movements %}
+                <ul class="list-group list-group-flush">
+                    {% for mov in movements[:10] %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ mov.product_name }}</strong>
+                                <br>
+                                <small>
+                                    {{ movement_badge(mov.movement_type) }}
+                                    <span class="fw-bold {{ 'text-success' if mov.quantity_change > 0 else 'text-danger' }}">
+                                        {{ '+' if mov.quantity_change > 0 }}{{ mov.quantity_change|int }}
+                                    </span>
+                                </small>
+                                {% if mov.source_location_name and mov.target_location_name %}
+                                <br>
+                                <small class="text-muted">
+                                    {{ mov.source_location_name }} → {{ mov.target_location_name }}
+                                </small>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">
+                                {{ mov.created_at.strftime('%m.%d %H:%M') if mov.created_at else '' }}
+                            </small>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="card-body text-center py-4">
+                    <p class="text-muted mb-0">Nincs mozgás</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Gyors műveletek -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning me-2"></i>Gyors műveletek
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if location.location_type == 'WAREHOUSE' %}
+                    <a href="{{ url_for('transfer.warehouse_to_car', source=location.id) }}" 
+                       class="btn btn-info w-100 mb-2">
+                        <i class="bi bi-truck me-2"></i>Autó feltöltése innen
+                    </a>
+                    <a href="{{ url_for('inventory.add_movement') }}" 
+                       class="btn btn-success w-100">
+                        <i class="bi bi-plus-circle me-2"></i>Bevételezés
+                    </a>
+                    {% elif location.location_type == 'CAR' %}
+                    <a href="{{ url_for('transfer.car_to_vending', source=location.id) }}" 
+                       class="btn btn-warning w-100 mb-2">
+                        <i class="bi bi-box-seam me-2"></i>Automata töltés
+                    </a>
+                    <a href="{{ url_for('transfer.warehouse_to_car', target=location.id) }}" 
+                       class="btn btn-info w-100">
+                        <i class="bi bi-building me-2"></i>Feltöltés raktárból
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('transfer.car_to_vending', target=location.id) }}" 
+                       class="btn btn-info w-100">
+                        <i class="bi bi-truck me-2"></i>Feltöltés autóból
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

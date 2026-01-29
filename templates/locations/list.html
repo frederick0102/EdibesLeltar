@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state %}
+
+{% block title %}Helyszínek - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {{ page_header(
+        title='Helyszínek',
+        subtitle='Raktárak, autók és automaták kezelése',
+        icon='geo-alt'
+    ) }}
+    
+    <!-- Szűrő és műveletek -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('locations.list_locations') }}" 
+                   class="btn btn-{{ 'primary' if not selected_type else 'outline-primary' }}">
+                    <i class="bi bi-list me-1"></i>Mind
+                </a>
+                {% for type_code, type_label in location_types %}
+                <a href="{{ url_for('locations.list_locations', type=type_code) }}" 
+                   class="btn btn-{{ 'primary' if selected_type == type_code else 'outline-primary' }}">
+                    <i class="bi bi-{{ LocationType.get_icon(type_code) }} me-1"></i>{{ type_label }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('locations.create_location') }}" class="btn btn-success">
+                <i class="bi bi-plus-circle me-1"></i>Új helyszín
+            </a>
+            {% if not show_deleted %}
+            <a href="{{ url_for('locations.list_locations', deleted='1') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-trash me-1"></i>Törölt
+            </a>
+            {% else %}
+            <a href="{{ url_for('locations.list_locations') }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-1"></i>Vissza
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if locations %}
+    <div class="row">
+        {% for loc in locations %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 border-0 shadow-sm {{ 'opacity-50' if loc.is_deleted }}">
+                <div class="card-header bg-{{ 'secondary' if loc.is_deleted else ('success' if loc.location_type == 'WAREHOUSE' else ('info' if loc.location_type == 'CAR' else 'warning')) }} text-white d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="bi bi-{{ LocationType.get_icon(loc.location_type) }} me-2"></i>
+                        {{ LocationType.get_label(loc.location_type) }}
+                    </span>
+                    {% if not loc.is_active %}
+                    <span class="badge bg-dark">Inaktív</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ loc.name }}</h5>
+                    {% if loc.description %}
+                    <p class="card-text text-muted small">{{ loc.description }}</p>
+                    {% endif %}
+                    {% if loc.address %}
+                    <p class="card-text small">
+                        <i class="bi bi-pin-map me-1"></i>{{ loc.address }}
+                    </p>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between text-muted small mt-3">
+                        <span><i class="bi bi-box me-1"></i>{{ loc.product_count }} termék</span>
+                        <span><i class="bi bi-stack me-1"></i>{{ loc.total_quantity|int }} db összesen</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    {% if loc.is_deleted %}
+                    <form action="{{ url_for('locations.restore_location', id=loc.id) }}" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Visszaállítás
+                        </button>
+                    </form>
+                    {% else %}
+                    <a href="{{ url_for('locations.location_inventory', id=loc.id) }}" 
+                       class="btn btn-sm btn-primary">
+                        <i class="bi bi-boxes me-1"></i>Készlet
+                    </a>
+                    <a href="{{ url_for('locations.edit_location', id=loc.id) }}" 
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-pencil me-1"></i>Szerkesztés
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-geo-alt fs-1 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">Nincs helyszín</h5>
+        <p class="text-muted">Hozza létre az első helyszínt (raktár, autó vagy automata)</p>
+        <a href="{{ url_for('locations.create_location') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Új helyszín
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

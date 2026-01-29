@@ -19,6 +19,16 @@
     <span class="badge bg-secondary">Kezdőkészlet</span>
 {% elif movement_type == 'LOSS' %}
     <span class="badge bg-dark">Selejt</span>
+{% elif movement_type == 'TRANSFER' %}
+    <span class="badge bg-primary">Áthelyezés</span>
+{% elif movement_type == 'TRANSFER_OUT' %}
+    <span class="badge bg-info">Kiadás</span>
+{% elif movement_type == 'TRANSFER_IN' %}
+    <span class="badge bg-success">Bevétel</span>
+{% elif movement_type == 'CONSUMPTION' %}
+    <span class="badge bg-warning text-dark">Fogyasztás</span>
+{% elif movement_type == 'REVERSAL' %}
+    <span class="badge bg-secondary"><i class="bi bi-arrow-counterclockwise me-1"></i>Visszavonás</span>
 {% else %}
     <span class="badge bg-light text-dark">{{ movement_type }}</span>
 {% endif %}

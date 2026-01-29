@@ -2,17 +2,44 @@
 
 Automata feltöltő készletkezelő rendszer - üdítő, szendvics, csoki és egyéb termékeket kiszolgáló automaták leltárkezelésére.
 
+## 🚀 Új: Multi-Location Supply Chain
+
+A rendszer támogatja a több helyszínes készletkezelést a teljes ellátási lánc mentén:
+
+```
+[Beszállító] ──BESZERZÉS──► [Raktár] ──FELTÖLTÉS──► [Autó] ──FOGYASZTÁS──► [Automata]
+```
+
+### Helyszín típusok
+- **🏭 Raktár (Warehouse):** Központi tárhely, ide érkeznek a beszerzések
+- **🚚 Autó (Car):** Mobil egység, amely a raktárból viszi a termékeket
+- **📦 Automata (Vending):** Végpont, ahová az autóból töltjük fel a készletet
+
+### Atomi tranzakciók
+Minden áthelyezés egy tranzakcióban történik - a forrásból csökken, a célba növekszik. Nincs "köztes állapot".
+
+### Kompenzáló tranzakciók
+Hibás mozgás esetén nem törlünk, hanem ellentétes mozgást hozunk létre (audit trail megőrzése).
+
 ## Funkciók
 
 ### 📦 Készletkezelés
+- **Multi-location készletnyilvántartás** - termék × helyszín
 - Termékek nyilvántartása kategóriákkal és mértékegységekkel
-- Vonalkód támogatás (későbbi mobilos vonalkód olvasáshoz)
-- Készletmozgások rögzítése (bevételezés, kivételezés, korrekció, selejt)
+- **Mobil vonalkód olvasó** (html5-qrcode) - kamerával működik
+- Készletmozgások rögzítése (bevételezés, kivételezés, áthelyezés, korrekció, selejt)
 - Gyors +/- gombok az azonnali készletváltozáshoz
-- Minimum készletszint riasztás
+- Minimum készletszint riasztás helyszínenként
+
+### 🔄 Áthelyezések
+- Raktár → Autó feltöltés
+- Autó → Automata töltés (mobil-optimalizált UI)
+- Gyors vonalkódos áthelyezés
+- Áthelyezés történet és visszavonás
 
 ### 📊 Összegző felület
 - Áttekintő dashboard a készletállapotról
+- Helyszínenkénti összesítések
 - Kategóriánkénti összesítések
 - Alacsony készletű termékek kiemelése
 - Utolsó mozgások listája
@@ -21,16 +48,18 @@ Automata feltöltő készletkezelő rendszer - üdítő, szendvics, csoki és eg
 - Termékek kezelése (CRUD)
 - Kategóriák kezelése
 - Mértékegységek kezelése
+- **Helyszínek kezelése** (raktár, autó, automata)
 - Soft delete - törölt elemek visszaállíthatók
 
 ### 🔒 Biztonság
-- Jelszavas belépés
+- Hash-elt jelszó (PBKDF2-SHA256)
 - Session alapú autentikáció
-- Helyi hálózaton működik
+- Helyi hálózaton működik (VPN támogatás)
 
 ### 💾 Adatbiztonság
-- SQLite adatbázis
+- SQLite adatbázis **WAL móddal** (biztonságos SD kártyán)
 - Minden változás naplózása (audit log)
+- **Kompenzáló tranzakciók** (soha nem törlünk)
 - Manuális és automatikus backup
 - Hálózati mentési lehetőség
 
@@ -172,6 +201,85 @@ A Raspberry Pi IP címét a következő paranccsal tudja lekérdezni:
 ```bash
 hostname -I
 ```
+
+## 🐳 Docker telepítés (ajánlott Raspberry Pi-re)
+
+A Docker telepítés egyszerűbb és könnyebben karbantartható, mint a manuális telepítés.
+
+### Docker előfeltételek
+
+```bash
+# Docker telepítése Raspberry Pi-re
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Docker Compose telepítése (ha nincs)
+sudo apt install docker-compose-plugin -y
+
+# Felhasználó hozzáadása a docker csoporthoz (újraindítás szükséges)
+sudo usermod -aG docker $USER
+```
+
+### Gyors telepítés Dockerrel
+
+```bash
+# Repository klónozása
+git clone <repo-url>
+cd EdibesLeltar
+
+# Titkos kulcs beállítása (opcionális de ajánlott)
+cp .env.example .env
+nano .env  # SECRET_KEY és APP_PASSWORD módosítása
+
+# Container indítása
+docker compose up -d
+
+# Ellenőrzés
+docker compose ps
+docker compose logs -f
+```
+
+### Elérés
+
+```
+http://<raspberry-pi-ip>:5000
+```
+
+### Docker parancsok
+
+```bash
+# Logok megtekintése
+docker compose logs -f
+
+# Container újraindítása
+docker compose restart
+
+# Container leállítása
+docker compose down
+
+# Container frissítése (új verzió telepítése)
+./update.sh
+```
+
+### Frissítés
+
+A mellékelt `update.sh` script automatikusan frissíti az alkalmazást:
+
+```bash
+chmod +x update.sh
+./update.sh
+```
+
+Ez a script:
+1. Letölti a legújabb változásokat Git-ből
+2. Újraépíti a Docker containert
+3. Törli a régi image-eket (helytakarékosság)
+
+### Docker adatmegőrzés
+
+A következő mappák a host-on maradnak (nem vesznek el container újraépítéskor):
+- `./data/` - SQLite adatbázis
+- `./backups/` - Backup fájlok
 
 ## Backup
 
