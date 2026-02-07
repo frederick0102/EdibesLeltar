@@ -141,10 +141,40 @@ def edit_location(id):
                          LocationType=LocationType)
 
 
+@locations_bp.route('/<int:id>/check-usage')
+@login_required
+def check_location_usage(id):
+    """Helyszín használat ellenőrzése (AJAX)"""
+    db = get_db_connection()
+    
+    location = db.execute('SELECT * FROM locations WHERE id = ?', (id,)).fetchone()
+    
+    if not location:
+        return jsonify({'error': 'Helyszín nem található'}), 404
+    
+    # Készlet összesen
+    stock = db.execute('''
+        SELECT COALESCE(SUM(quantity), 0) as total FROM location_inventory WHERE location_id = ?
+    ''', (id,)).fetchone()['total']
+    
+    # Termékfajták száma
+    product_count = db.execute('''
+        SELECT COUNT(*) as cnt FROM location_inventory 
+        WHERE location_id = ? AND quantity > 0
+    ''', (id,)).fetchone()['cnt']
+    
+    return jsonify({
+        'name': location['name'],
+        'stock_total': stock,
+        'product_count': product_count,
+        'has_stock': stock > 0
+    })
+
+
 @locations_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_location(id):
-    """Helyszín törlése (soft delete)"""
+    """Helyszín törlése (soft delete) - dupla megerősítéssel ha készlet van"""
     db = get_db_connection()
     
     location = db.execute('SELECT * FROM locations WHERE id = ?', (id,)).fetchone()
@@ -154,11 +184,14 @@ def delete_location(id):
     
     # Ellenőrizzük, van-e készlet a helyszínen
     stock = db.execute('''
-        SELECT SUM(quantity) as total FROM location_inventory WHERE location_id = ?
-    ''', (id,)).fetchone()
+        SELECT COALESCE(SUM(quantity), 0) as total FROM location_inventory WHERE location_id = ?
+    ''', (id,)).fetchone()['total']
     
-    if stock and stock['total'] and stock['total'] > 0:
-        flash('A helyszín nem törölhető, mert van rajta készlet!', 'danger')
+    # Megerősítés ellenőrzése
+    confirm = request.form.get('confirm', '')
+    
+    if stock > 0 and confirm != 'TORLOM':
+        flash(f'⚠️ Ezen a helyszínen {int(stock)} db készlet van! A törléshez írd be: TORLOM', 'danger')
         return redirect(url_for('locations.list_locations'))
     
     try:
@@ -169,9 +202,13 @@ def delete_location(id):
         ''', (id,))
         db.commit()
         
-        log_audit('locations', id, 'DELETE', dict(location), None)
+        log_audit('locations', id, 'SOFT_DELETE', 
+                  {'name': location['name'], 'stock_at_delete': stock}, None)
         
-        flash('Helyszín törölve!', 'success')
+        if stock > 0:
+            flash(f'Helyszín törölve: {location["name"]} (figyelem: {int(stock)} db készlet volt rajta!)', 'warning')
+        else:
+            flash('Helyszín törölve!', 'success')
     except Exception as e:
         db.rollback()
         flash(f'Hiba történt: {str(e)}', 'danger')

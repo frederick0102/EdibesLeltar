@@ -69,12 +69,10 @@
                                 <td class="text-muted">{{ cat.description or '-' }}</td>
                                 <td class="text-end">
                                     {% if not cat.is_deleted %}
-                                    <form method="POST" action="{{ url_for('products.delete_category', category_id=cat.id) }}" 
-                                          class="d-inline" onsubmit="return confirm('Biztosan törli a kategóriát?')">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="showDeleteModal('category', {{ cat.id }}, '{{ cat.name }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -88,4 +86,81 @@
         </div>
     </div>
 </div>
+
+<!-- Törlés megerősítő modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Törlés megerősítése</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="deleteForm" method="POST">
+                <div class="modal-body">
+                    <p id="deleteMessage">Biztosan törli ezt a kategóriát?</p>
+                    
+                    <!-- Figyelmeztetés ha vannak kapcsolódó termékek -->
+                    <div id="deleteWarning" class="alert alert-warning d-none">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Figyelem!</strong> Ez a kategória <span id="productCount">0</span> termékhez tartozik!
+                        <hr>
+                        <p class="mb-2"><strong>Fontold meg:</strong> Nem lenne jobb átnevezni a kategóriát?</p>
+                        <p class="mb-0 text-muted small">Pl. "Snack" → "Nasi" vagy "Csoki" → "Édesség"</p>
+                    </div>
+                    
+                    <!-- Megerősítő szöveg bevitel -->
+                    <div id="confirmInputDiv" class="d-none">
+                        <label for="confirmInput" class="form-label">
+                            A törléshez írd be: <strong>TORLOM</strong>
+                        </label>
+                        <input type="text" class="form-control" id="confirmInput" name="confirm" 
+                               placeholder="TORLOM" autocomplete="off">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+                    <button type="submit" class="btn btn-danger" id="deleteBtn">
+                        <i class="bi bi-trash me-1"></i>Törlés
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showDeleteModal(type, id, name) {
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const form = document.getElementById('deleteForm');
+    const message = document.getElementById('deleteMessage');
+    const warning = document.getElementById('deleteWarning');
+    const confirmDiv = document.getElementById('confirmInputDiv');
+    const confirmInput = document.getElementById('confirmInput');
+    const productCount = document.getElementById('productCount');
+    
+    // Reset
+    warning.classList.add('d-none');
+    confirmDiv.classList.add('d-none');
+    confirmInput.value = '';
+    
+    message.textContent = `Biztosan törli ezt a kategóriát: "${name}"?`;
+    form.action = `/products/categories/delete/${id}`;
+    
+    // Ellenőrizzük a kapcsolódó termékeket
+    fetch(`/products/categories/${id}/check-usage`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.has_products) {
+                productCount.textContent = data.product_count;
+                warning.classList.remove('d-none');
+                confirmDiv.classList.remove('d-none');
+            }
+        })
+        .catch(console.error);
+    
+    modal.show();
+}
+</script>
 {% endblock %}

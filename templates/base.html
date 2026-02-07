@@ -172,6 +172,58 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
+    <!-- Helyi időzóna konverzió -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // UTC időbélyegek konvertálása helyi időzónára
+        document.querySelectorAll('.local-time').forEach(function(el) {
+            const utcStr = el.dataset.utc;
+            const format = el.dataset.format || 'datetime';
+            
+            if (utcStr) {
+                const date = new Date(utcStr);
+                if (!isNaN(date.getTime())) {
+                    let formatted;
+                    const pad = n => n.toString().padStart(2, '0');
+                    
+                    const year = date.getFullYear();
+                    const month = pad(date.getMonth() + 1);
+                    const day = pad(date.getDate());
+                    const hours = pad(date.getHours());
+                    const minutes = pad(date.getMinutes());
+                    
+                    switch(format) {
+                        case 'date':
+                            formatted = `${year}.${month}.${day}`;
+                            break;
+                        case 'time':
+                            formatted = `${hours}:${minutes}`;
+                            break;
+                        case 'short':
+                            formatted = `${month}.${day} ${hours}:${minutes}`;
+                            break;
+                        case 'datetime':
+                        default:
+                            formatted = `${year}.${month}.${day} ${hours}:${minutes}`;
+                    }
+                    
+                    el.textContent = formatted;
+                }
+            }
+        });
+        
+        // Lábléc aktuális idő frissítése
+        function updateFooterTime() {
+            const el = document.getElementById('current-time');
+            if (el) {
+                el.textContent = new Date().toLocaleString('hu-HU');
+            }
+        }
+        updateFooterTime();
+        setInterval(updateFooterTime, 1000);
+    });
+    </script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>

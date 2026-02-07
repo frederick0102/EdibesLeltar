@@ -398,12 +398,13 @@ def add_movement():
         ('LOSS', 'Selejt/Veszteség (-)')
     ]
     
-    # Vonalkód paraméter kezelése (vonalkód olvasóhoz)
+    # Vonalkód és termék paraméter kezelése
     barcode = request.args.get('barcode', '')
-    selected_product_id = None
+    selected_product_id = request.args.get('product', type=int)
     selected_location_id = request.args.get('location', default_location_id)
+    selected_movement_type = request.args.get('type', '')
     
-    if barcode:
+    if barcode and not selected_product_id:
         product = db.execute('''
             SELECT id FROM products WHERE barcode = ? AND is_deleted = 0
         ''', (barcode,)).fetchone()
@@ -416,6 +417,7 @@ def add_movement():
                          movement_types=movement_types,
                          selected_product_id=selected_product_id,
                          selected_location_id=selected_location_id,
+                         selected_movement_type=selected_movement_type,
                          barcode=barcode,
                          LocationType=LocationType)
 

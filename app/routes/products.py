@@ -381,16 +381,53 @@ def add_category():
     return redirect(url_for('products.list_categories'))
 
 
+@products_bp.route('/categories/<int:category_id>/check-usage')
+@login_required
+def check_category_usage(category_id):
+    """Kategória használat ellenőrzése (AJAX)"""
+    db = get_db_connection()
+    
+    category = db.execute('SELECT * FROM categories WHERE id = ?', (category_id,)).fetchone()
+    
+    if not category:
+        return jsonify({'error': 'Kategória nem található'}), 404
+    
+    # Kapcsolódó termékek száma
+    product_count = db.execute('''
+        SELECT COUNT(*) as cnt FROM products 
+        WHERE category_id = ? AND is_deleted = 0
+    ''', (category_id,)).fetchone()['cnt']
+    
+    return jsonify({
+        'name': category['name'],
+        'product_count': product_count,
+        'has_products': product_count > 0
+    })
+
+
 @products_bp.route('/categories/delete/<int:category_id>', methods=['POST'])
 @login_required
 def delete_category(category_id):
-    """Kategória törlése (soft delete)"""
+    """Kategória törlése (soft delete) - dupla megerősítéssel ha termék kapcsolódik"""
     db = get_db_connection()
     
     category = db.execute('SELECT * FROM categories WHERE id = ?', (category_id,)).fetchone()
     
     if not category:
         flash('Kategória nem található!', 'danger')
+        return redirect(url_for('products.list_categories'))
+    
+    # Ellenőrizzük a kapcsolódó termékeket
+    product_count = db.execute('''
+        SELECT COUNT(*) as cnt FROM products 
+        WHERE category_id = ? AND is_deleted = 0
+    ''', (category_id,)).fetchone()['cnt']
+    
+    # Megerősítés ellenőrzése
+    confirm = request.form.get('confirm', '')
+    
+    if product_count > 0 and confirm != 'TORLOM':
+        flash(f'⚠️ Ez a kategória {product_count} termékhez tartozik! A törléshez írd be: TORLOM', 'warning')
         return redirect(url_for('products.list_categories'))
     
     try:
@@ -400,10 +437,15 @@ def delete_category(category_id):
             WHERE id = ?
         ''', (datetime.now(), datetime.now(), category_id))
         
-        log_audit('categories', category_id, 'SOFT_DELETE', dict(category), None)
+        log_audit('categories', category_id, 'SOFT_DELETE', 
+                  {'name': category['name'], 'affected_products': product_count}, None)
         
         db.commit()
-        flash(f'Kategória törölve: {category["name"]}', 'success')
+        
+        if product_count > 0:
+            flash(f'Kategória törölve: {category["name"]} ({product_count} termék kategória nélkül maradt)', 'warning')
+        else:
+            flash(f'Kategória törölve: {category["name"]}', 'success')
         
     except Exception as e:
         db.rollback()
@@ -464,16 +506,53 @@ def add_unit():
     return redirect(url_for('products.list_units'))
 
 
+@products_bp.route('/units/<int:unit_id>/check-usage')
+@login_required
+def check_unit_usage(unit_id):
+    """Mértékegység használat ellenőrzése (AJAX)"""
+    db = get_db_connection()
+    
+    unit = db.execute('SELECT * FROM units WHERE id = ?', (unit_id,)).fetchone()
+    
+    if not unit:
+        return jsonify({'error': 'Mértékegység nem található'}), 404
+    
+    # Kapcsolódó termékek száma
+    product_count = db.execute('''
+        SELECT COUNT(*) as cnt FROM products 
+        WHERE unit_id = ? AND is_deleted = 0
+    ''', (unit_id,)).fetchone()['cnt']
+    
+    return jsonify({
+        'name': unit['name'],
+        'product_count': product_count,
+        'has_products': product_count > 0
+    })
+
+
 @products_bp.route('/units/delete/<int:unit_id>', methods=['POST'])
 @login_required
 def delete_unit(unit_id):
-    """Mértékegység törlése (soft delete)"""
+    """Mértékegység törlése (soft delete) - dupla megerősítéssel ha termék kapcsolódik"""
     db = get_db_connection()
     
     unit = db.execute('SELECT * FROM units WHERE id = ?', (unit_id,)).fetchone()
     
     if not unit:
         flash('Mértékegység nem található!', 'danger')
+        return redirect(url_for('products.list_units'))
+    
+    # Ellenőrizzük a kapcsolódó termékeket
+    product_count = db.execute('''
+        SELECT COUNT(*) as cnt FROM products 
+        WHERE unit_id = ? AND is_deleted = 0
+    ''', (unit_id,)).fetchone()['cnt']
+    
+    # Megerősítés ellenőrzése
+    confirm = request.form.get('confirm', '')
+    
+    if product_count > 0 and confirm != 'TORLOM':
+        flash(f'⚠️ Ez a mértékegység {product_count} termékhez tartozik! A törléshez írd be: TORLOM', 'warning')
         return redirect(url_for('products.list_units'))
     
     try:
@@ -483,10 +562,15 @@ def delete_unit(unit_id):
             WHERE id = ?
         ''', (datetime.now(), datetime.now(), unit_id))
         
-        log_audit('units', unit_id, 'SOFT_DELETE', dict(unit), None)
+        log_audit('units', unit_id, 'SOFT_DELETE', 
+                  {'name': unit['name'], 'affected_products': product_count}, None)
         
         db.commit()
-        flash(f'Mértékegység törölve: {unit["name"]}', 'success')
+        
+        if product_count > 0:
+            flash(f'Mértékegység törölve: {unit["name"]} ({product_count} termék mértékegység nélkül maradt)', 'warning')
+        else:
+            flash(f'Mértékegység törölve: {unit["name"]}', 'success')
         
     except Exception as e:
         db.rollback()

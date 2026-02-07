@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header %}
+
+{% block title %}Gyors áthelyezés - Edibes Leltár{% endblock %}
+
+{% block content %}
+<div class="container">
+    {{ page_header(
+        title='Gyors áthelyezés',
+        subtitle='Termék mozgatása helyszínek között',
+        icon='arrow-left-right',
+        back_url=url_for('inventory.inventory_list')
+    ) }}
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('transfer.execute_quick_transfer') }}" id="quickTransferForm">
+                        
+                        <!-- Termék választó -->
+                        <div class="mb-4">
+                            <label for="product_id" class="form-label fw-bold">
+                                <i class="bi bi-box-seam me-1"></i>Termék
+                            </label>
+                            <select class="form-select form-select-lg" id="product_id" name="product_id" required>
+                                <option value="">-- Válasszon terméket --</option>
+                                {% for p in products %}
+                                <option value="{{ p.id }}" 
+                                        data-barcode="{{ p.barcode or '' }}"
+                                        {% if product and product.id == p.id %}selected{% endif %}>
+                                    {{ p.name }}
+                                    {% if p.package_size or p.unit_abbr %}
+                                    ({{ p.package_size or '' }}{% if p.package_size and p.unit_abbr %} {% endif %}{{ p.unit_abbr or '' }})
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        {% if product %}
+                        <!-- Termék adatai -->
+                        <div class="alert alert-info mb-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <strong>{{ product.name }}</strong>
+                                    {% if product.barcode %}
+                                    <span class="badge bg-secondary ms-2">
+                                        <i class="bi bi-upc me-1"></i>{{ product.barcode }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if product.category_name %}
+                                <span class="badge bg-primary">{{ product.category_name }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Készlet áttekintés -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-geo-alt me-1"></i>Jelenlegi készletek
+                            </label>
+                            <div class="row g-2">
+                                {% for loc in locations %}
+                                <div class="col-md-6">
+                                    <div class="border rounded p-2 d-flex justify-content-between align-items-center 
+                                                {% if location_stocks.get(loc.id, 0) > 0 %}bg-light{% else %}bg-white text-muted{% endif %}">
+                                        <span>
+                                            {{ LocationType.get_icon(loc.location_type) }}
+                                            {{ loc.name }}
+                                        </span>
+                                        <strong class="{% if location_stocks.get(loc.id, 0) > 0 %}text-success{% endif %}">
+                                            {{ "%.0f"|format(location_stocks.get(loc.id, 0)) }} db
+                                        </strong>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- Forrás és cél -->
+                        <div class="row">
+                            <div class="col-md-5 mb-3">
+                                <label for="source_location_id" class="form-label fw-bold">
+                                    <i class="bi bi-box-arrow-right text-danger me-1"></i>Honnan
+                                </label>
+                                <select class="form-select" id="source_location_id" name="source_location_id" required>
+                                    <option value="">-- Forrás helyszín --</option>
+                                    {% for loc in locations %}
+                                    <option value="{{ loc.id }}" 
+                                            data-stock="{{ location_stocks.get(loc.id, 0) }}"
+                                            {% if location_stocks.get(loc.id, 0) == 0 %}disabled{% endif %}>
+                                        {{ LocationType.get_icon(loc.location_type) }} {{ loc.name }} 
+                                        ({{ "%.0f"|format(location_stocks.get(loc.id, 0)) }} db)
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-2 mb-3 d-flex align-items-end justify-content-center">
+                                <i class="bi bi-arrow-right fs-2 text-primary"></i>
+                            </div>
+                            
+                            <div class="col-md-5 mb-3">
+                                <label for="target_location_id" class="form-label fw-bold">
+                                    <i class="bi bi-box-arrow-in-down text-success me-1"></i>Hova
+                                </label>
+                                <select class="form-select" id="target_location_id" name="target_location_id" required>
+                                    <option value="">-- Cél helyszín --</option>
+                                    {% for loc in locations %}
+                                    <option value="{{ loc.id }}">
+                                        {{ LocationType.get_icon(loc.location_type) }} {{ loc.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Mennyiség -->
+                        <div class="mb-4">
+                            <label for="quantity" class="form-label fw-bold">
+                                <i class="bi bi-123 me-1"></i>Mennyiség
+                            </label>
+                            <div class="input-group">
+                                <input type="number" class="form-control form-control-lg text-center" 
+                                       id="quantity" name="quantity" 
+                                       min="1" step="1" value="1" required>
+                                <span class="input-group-text">darab</span>
+                            </div>
+                            <div id="availableStock" class="form-text text-muted"></div>
+                        </div>
+                        
+                        <!-- Megjegyzés -->
+                        <div class="mb-4">
+                            <label for="note" class="form-label">
+                                <i class="bi bi-chat-dots me-1"></i>Megjegyzés (opcionális)
+                            </label>
+                            <input type="text" class="form-control" id="note" name="note" 
+                                   placeholder="Pl.: Reggeli feltöltés">
+                        </div>
+                        
+                        <!-- Gombok -->
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('inventory.inventory_list') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>Vissza
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1" id="submitBtn">
+                                <i class="bi bi-check-circle me-2"></i>Áthelyezés végrehajtása
+                            </button>
+                        </div>
+                        
+                        {% else %}
+                        <!-- Nincs termék kiválasztva -->
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-hand-index fs-1 mb-3 d-block"></i>
+                            <p>Válasszon egy terméket a fenti listából</p>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const productSelect = document.getElementById('product_id');
+    const sourceSelect = document.getElementById('source_location_id');
+    const targetSelect = document.getElementById('target_location_id');
+    const quantityInput = document.getElementById('quantity');
+    const availableStockDiv = document.getElementById('availableStock');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Termék változás -> oldal újratöltés
+    if (productSelect) {
+        productSelect.addEventListener('change', function() {
+            if (this.value) {
+                window.location.href = '{{ url_for("transfer.quick_transfer") }}?product=' + this.value;
+            }
+        });
+    }
+    
+    // Forrás változás -> max mennyiség frissítés
+    if (sourceSelect) {
+        sourceSelect.addEventListener('change', function() {
+            const option = this.options[this.selectedIndex];
+            const stock = parseFloat(option.dataset.stock) || 0;
+            
+            if (quantityInput) {
+                quantityInput.max = stock;
+            }
+            
+            if (availableStockDiv) {
+                if (stock > 0) {
+                    availableStockDiv.innerHTML = '<i class="bi bi-info-circle me-1"></i>Elérhető: <strong>' + stock + '</strong> db';
+                } else {
+                    availableStockDiv.textContent = '';
+                }
+            }
+        });
+    }
+    
+    // Validáció: forrás és cél nem lehet ugyanaz
+    if (targetSelect) {
+        targetSelect.addEventListener('change', function() {
+            if (sourceSelect && this.value === sourceSelect.value && this.value !== '') {
+                alert('A forrás és cél helyszín nem lehet ugyanaz!');
+                this.value = '';
+            }
+        });
+    }
+    
+    // Form validáció
+    const form = document.getElementById('quickTransferForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (sourceSelect && targetSelect) {
+                if (sourceSelect.value === targetSelect.value) {
+                    e.preventDefault();
+                    alert('A forrás és cél helyszín nem lehet ugyanaz!');
+                    return false;
+                }
+            }
+            
+            // Megerősítés
+            const productText = productSelect ? productSelect.options[productSelect.selectedIndex].text : '';
+            const qty = quantityInput ? quantityInput.value : 0;
+            const sourceText = sourceSelect ? sourceSelect.options[sourceSelect.selectedIndex].text : '';
+            const targetText = targetSelect ? targetSelect.options[targetSelect.selectedIndex].text : '';
+            
+            const confirmMsg = `Biztosan áthelyez ${qty} db terméket?\n\n` +
+                             `Termék: ${productText}\n` +
+                             `Honnan: ${sourceText}\n` +
+                             `Hova: ${targetText}`;
+            
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

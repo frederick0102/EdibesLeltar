@@ -172,3 +172,13 @@
     </div>
 </div>
 {% endmacro %}
+
+{# Helyi időzóna megjelenítés - JavaScript konvertálja a kliens időzónájára #}
+{# format: 'datetime' (YYYY.MM.DD HH:MM), 'date' (YYYY.MM.DD), 'time' (HH:MM), 'short' (MM.DD HH:MM) #}
+{% macro local_time(dt, format='datetime') %}
+{% if dt %}
+<span class="local-time" data-utc="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z" data-format="{{ format }}">{{ dt.strftime('%Y.%m.%d %H:%M') }}</span>
+{% else %}
+-
+{% endif %}
+{% endmacro %}

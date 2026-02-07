@@ -178,18 +178,24 @@ def init_db():
     # Migráció: helyszín oszlopok hozzáadása a meglévő inventory_movements táblához
     _migrate_inventory_movements(db)
     
-    # Audit log tábla (minden változás követése)
+    # Audit log tábla (minden változás követése) - BŐVÍTETT
     db.execute('''
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             table_name TEXT NOT NULL,
-            record_id INTEGER NOT NULL,
+            record_id INTEGER,
             action TEXT NOT NULL,
             old_values TEXT,
             new_values TEXT,
+            user_id TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Migráció: új oszlopok hozzáadása az audit_log táblához
+    _migrate_audit_log(db)
     
     # Alapértelmezett adatok beszúrása (ha még nem léteznek)
     _insert_default_data(db)
@@ -218,6 +224,22 @@ def _migrate_inventory_movements(db):
     for column_name, column_type in columns_to_add:
         try:
             db.execute(f'ALTER TABLE inventory_movements ADD COLUMN {column_name} {column_type}')
+        except sqlite3.OperationalError:
+            # Oszlop már létezik
+            pass
+
+
+def _migrate_audit_log(db):
+    """Migráció: új oszlopok hozzáadása az audit_log táblához"""
+    columns_to_add = [
+        ('user_id', 'TEXT'),
+        ('ip_address', 'TEXT'),
+        ('user_agent', 'TEXT')
+    ]
+    
+    for column_name, column_type in columns_to_add:
+        try:
+            db.execute(f'ALTER TABLE audit_log ADD COLUMN {column_name} {column_type}')
         except sqlite3.OperationalError:
             # Oszlop már létezik
             pass
@@ -338,12 +360,55 @@ def _insert_default_data(db):
 
 
 def log_audit(table_name, record_id, action, old_values=None, new_values=None):
-    """Audit log bejegyzés létrehozása"""
+    """
+    Audit log bejegyzés létrehozása
+    Automatikusan rögzíti a user_id, IP cím és user agent adatokat
+    """
+    from flask import request, has_request_context
+    from flask_login import current_user
+    import json
+    
     db = get_db_connection()
+    
+    # Request kontextus adatok
+    user_id = None
+    ip_address = None
+    user_agent = None
+    
+    if has_request_context():
+        # User ID
+        try:
+            if current_user and current_user.is_authenticated:
+                user_id = current_user.id
+        except:
+            pass
+        
+        # IP cím (proxy mögött is)
+        ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip_address and ',' in ip_address:
+            ip_address = ip_address.split(',')[0].strip()
+        
+        # User Agent
+        user_agent = request.headers.get('User-Agent', '')[:500]  # Max 500 karakter
+    
+    # Értékek JSON formátumban
+    old_json = None
+    new_json = None
+    
+    if old_values:
+        if isinstance(old_values, dict):
+            old_json = json.dumps(old_values, ensure_ascii=False, default=str)
+        else:
+            old_json = str(old_values)
+    
+    if new_values:
+        if isinstance(new_values, dict):
+            new_json = json.dumps(new_values, ensure_ascii=False, default=str)
+        else:
+            new_json = str(new_values)
+    
     db.execute('''
-        INSERT INTO audit_log (table_name, record_id, action, old_values, new_values)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (table_name, record_id, action, 
-          str(old_values) if old_values else None,
-          str(new_values) if new_values else None))
+        INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, user_id, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (table_name, record_id, action, old_json, new_json, user_id, ip_address, user_agent))
     db.commit()

@@ -149,6 +149,115 @@ def transfer_home():
                          LocationType=LocationType)
 
 
+@transfer_bp.route('/quick')
+@login_required
+def quick_transfer():
+    """
+    GYORS ÁTHELYEZÉS - termék alapú
+    URL: /transfer/quick?product=123
+    Egy adott termék helyszínek közötti mozgatása
+    """
+    db = get_db_connection()
+    
+    product_id = request.args.get('product', type=int)
+    
+    # Termék adatai
+    product = None
+    if product_id:
+        product = db.execute('''
+            SELECT p.*, u.abbreviation as unit_abbr, c.name as category_name
+            FROM products p
+            LEFT JOIN units u ON p.unit_id = u.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.id = ? AND p.is_deleted = 0
+        ''', (product_id,)).fetchone()
+    
+    # Összes aktív helyszín
+    locations = db.execute('''
+        SELECT * FROM locations 
+        WHERE is_deleted = 0 AND is_active = 1
+        ORDER BY 
+            CASE location_type 
+                WHEN 'WAREHOUSE' THEN 1 
+                WHEN 'CAR' THEN 2 
+                WHEN 'VENDING' THEN 3 
+            END, name
+    ''').fetchall()
+    
+    # Termék készletei helyszínenként
+    location_stocks = {}
+    if product_id:
+        stocks = db.execute('''
+            SELECT location_id, quantity 
+            FROM location_inventory 
+            WHERE product_id = ?
+        ''', (product_id,)).fetchall()
+        location_stocks = {s['location_id']: s['quantity'] for s in stocks}
+    
+    # Összes termék a listához
+    products = db.execute('''
+        SELECT p.id, p.name, p.barcode, p.package_size, u.abbreviation as unit_abbr
+        FROM products p
+        LEFT JOIN units u ON p.unit_id = u.id
+        WHERE p.is_deleted = 0
+        ORDER BY p.name
+    ''').fetchall()
+    
+    return render_template('transfer/quick_product.html',
+                         product=product,
+                         products=products,
+                         locations=locations,
+                         location_stocks=location_stocks,
+                         LocationType=LocationType)
+
+
+@transfer_bp.route('/quick/execute', methods=['POST'])
+@login_required
+def execute_quick_transfer():
+    """
+    GYORS ÁTHELYEZÉS végrehajtása
+    POST adatok: product_id, source_location_id, target_location_id, quantity, note
+    """
+    db = get_db_connection()
+    
+    product_id = request.form.get('product_id', type=int)
+    source_id = request.form.get('source_location_id', type=int)
+    target_id = request.form.get('target_location_id', type=int)
+    quantity = request.form.get('quantity', type=float)
+    note = request.form.get('note', '').strip() or None
+    
+    if not all([product_id, source_id, target_id, quantity]):
+        flash('Minden mező kitöltése kötelező!', 'danger')
+        return redirect(url_for('transfer.quick_transfer', product=product_id))
+    
+    if source_id == target_id:
+        flash('A forrás és cél helyszín nem lehet ugyanaz!', 'danger')
+        return redirect(url_for('transfer.quick_transfer', product=product_id))
+    
+    if quantity <= 0:
+        flash('A mennyiségnek pozitívnak kell lennie!', 'danger')
+        return redirect(url_for('transfer.quick_transfer', product=product_id))
+    
+    try:
+        execute_transfer(db, product_id, source_id, target_id, quantity, note)
+        
+        # Termék és helyszín nevek a flash üzenethez
+        product = db.execute('SELECT name FROM products WHERE id = ?', (product_id,)).fetchone()
+        source = db.execute('SELECT name FROM locations WHERE id = ?', (source_id,)).fetchone()
+        target = db.execute('SELECT name FROM locations WHERE id = ?', (target_id,)).fetchone()
+        
+        flash(f'Sikeres áthelyezés! {int(quantity)} db {product["name"]} ({source["name"]} → {target["name"]})', 'success')
+        return redirect(url_for('inventory.inventory_list'))
+        
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return redirect(url_for('transfer.quick_transfer', product=product_id))
+    except Exception as e:
+        db.rollback()
+        flash(f'Hiba történt: {str(e)}', 'danger')
+        return redirect(url_for('transfer.quick_transfer', product=product_id))
+
+
 @transfer_bp.route('/warehouse-to-car', methods=['GET', 'POST'])
 @login_required
 def warehouse_to_car():

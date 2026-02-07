@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/components.html" import page_header, movement_badge, product_name, quantity_change, empty_state %}
+{% from "macros/components.html" import page_header, movement_badge, product_name, quantity_change, empty_state, local_time %}
 
 {% block title %}Mozgás napló - Edibes Leltár{% endblock %}
 
@@ -103,7 +103,7 @@
                     {% for move in movements %}
                     <tr>
                         <td>
-                            <small>{{ move.created_at }}</small>
+                            <small>{{ local_time(move.created_at, 'datetime') }}</small>
                         </td>
                         <td>
                             {{ product_name(

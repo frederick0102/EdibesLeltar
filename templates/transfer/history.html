@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/components.html" import page_header, movement_badge %}
+{% from "macros/components.html" import page_header, movement_badge, local_time %}
 
 {% block title %}Áthelyezések története - Edibes Leltár{% endblock %}
 
@@ -52,8 +52,8 @@
                     <tr>
                         <td>
                             <small>
-                                {{ mov.created_at.strftime('%Y.%m.%d') if mov.created_at else '-' }}<br>
-                                <span class="text-muted">{{ mov.created_at.strftime('%H:%M') if mov.created_at else '' }}</span>
+                                {{ local_time(mov.created_at, 'date') }}<br>
+                                <span class="text-muted">{{ local_time(mov.created_at, 'time') }}</span>
                             </small>
                         </td>
                         <td>

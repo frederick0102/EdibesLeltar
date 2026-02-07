@@ -110,31 +110,10 @@
                 <div class="card-body p-4">
                     <form method="POST" id="movementForm" onsubmit="return confirmSubmit(event)">
                         <div class="row g-3">
-                            <!-- Helyszín kiválasztása - FONTOS -->
-                            <div class="col-12">
-                                <label for="location_id" class="form-label">
-                                    <i class="bi bi-geo-alt me-1"></i>Helyszín <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select form-select-lg" id="location_id" name="location_id" required>
-                                    {% for location in locations %}
-                                    <option value="{{ location.id }}" 
-                                            data-type="{{ location.location_type }}"
-                                            {% if selected_location_id and selected_location_id|string == location.id|string %}selected{% endif %}>
-                                        {{ LocationType.get_icon(location.location_type) }} {{ location.name }} 
-                                        ({{ LocationType.get_label(location.location_type) }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <div class="form-text">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    Válassza ki, melyik helyszínen történik a készletmozgás.
-                                </div>
-                            </div>
-                            
-                            <!-- Termék kiválasztása -->
+                            <!-- Termék kiválasztása - ELSŐ (vonalkód után rögtön ide néz a felhasználó) -->
                             <div class="col-12">
                                 <label for="product_id" class="form-label">
-                                    Termék <span class="text-danger">*</span>
+                                    <i class="bi bi-box-seam me-1"></i>Termék <span class="text-danger">*</span>
                                 </label>
                                 <select class="form-select form-select-lg" id="product_id" name="product_id" required>
                                     <option value="">-- Válasszon terméket --</option>
@@ -150,6 +129,27 @@
                                     </option>
                                     {% endfor %}
                                 </select>
+                            </div>
+                            
+                            <!-- Helyszín kiválasztása - MÁSODIK -->
+                            <div class="col-12">
+                                <label for="location_id" class="form-label">
+                                    <i class="bi bi-geo-alt me-1"></i>Helyszín <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select form-select-lg border-warning" id="location_id" name="location_id" required>
+                                    {% for location in locations %}
+                                    <option value="{{ location.id }}" 
+                                            data-type="{{ location.location_type }}"
+                                            {% if selected_location_id and selected_location_id|string == location.id|string %}selected{% endif %}>
+                                        {{ LocationType.get_icon(location.location_type) }} {{ location.name }} 
+                                        ({{ LocationType.get_label(location.location_type) }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text text-warning">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <strong>Ellenőrizze a helyszínt!</strong> Melyik helyszínen történik a mozgás?
+                                </div>
                             </div>
                             
                             <!-- Készlet információ megjelenítése -->
@@ -182,7 +182,7 @@
                                 </label>
                                 <select class="form-select" id="movement_type" name="movement_type" required onchange="updateQuantityField()">
                                     {% for type_code, type_name in movement_types %}
-                                    <option value="{{ type_code }}">{{ type_name }}</option>
+                                    <option value="{{ type_code }}" {% if selected_movement_type == type_code %}selected{% endif %}>{{ type_name }}</option>
                                     {% endfor %}
                                 </select>
                                 <div id="adjustmentHint" class="form-text d-none text-info">

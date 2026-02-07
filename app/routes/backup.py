@@ -199,3 +199,58 @@ def cleanup_backups():
         flash(f'Hiba történt: {str(e)}', 'danger')
     
     return redirect(url_for('backup.backup_page'))
+
+
+@backup_bp.route('/upload', methods=['POST'])
+@login_required
+def upload_backup():
+    """Backup fájl feltöltése (importálás)"""
+    if 'backup_file' not in request.files:
+        flash('Nincs fájl kiválasztva!', 'danger')
+        return redirect(url_for('backup.backup_page'))
+    
+    file = request.files['backup_file']
+    
+    if file.filename == '':
+        flash('Nincs fájl kiválasztva!', 'danger')
+        return redirect(url_for('backup.backup_page'))
+    
+    # Csak .db fájl engedélyezett
+    if not file.filename.endswith('.db'):
+        flash('Csak .db kiterjesztésű fájl tölthető fel!', 'danger')
+        return redirect(url_for('backup.backup_page'))
+    
+    try:
+        backup_dir = current_app.config['BACKUP_DIR']
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Fájlnév generálás (ha nem leltar_backup_ formátumú, átnevezzük)
+        if file.filename.startswith('leltar_backup_'):
+            save_filename = file.filename
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            save_filename = f'leltar_backup_{timestamp}_imported.db'
+        
+        save_path = os.path.join(backup_dir, save_filename)
+        file.save(save_path)
+        
+        flash(f'Backup sikeresen feltöltve: {save_filename}', 'success')
+    except Exception as e:
+        flash(f'Hiba történt a feltöltés során: {str(e)}', 'danger')
+    
+    return redirect(url_for('backup.backup_page'))
+
+
+@backup_bp.route('/export')
+@login_required
+def export_current():
+    """Aktuális adatbázis exportálása (letöltése) közvetlenül"""
+    db_path = current_app.config['DATABASE_PATH']
+    
+    if os.path.exists(db_path):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        download_name = f'leltar_export_{timestamp}.db'
+        return send_file(db_path, as_attachment=True, download_name=download_name)
+    
+    flash('Adatbázis nem található!', 'danger')
+    return redirect(url_for('backup.backup_page'))

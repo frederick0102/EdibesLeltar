@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import page_header, empty_state, local_time %}
+
+{% block title %}Audit napló - Edibes Leltár{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-action {
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    .log-details {
+        font-size: 0.8rem;
+        max-width: 400px;
+        word-break: break-word;
+    }
+    .log-ip {
+        font-family: monospace;
+        font-size: 0.75rem;
+    }
+    pre.json-display {
+        font-size: 0.7rem;
+        background: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 4px;
+        max-height: 150px;
+        overflow-y: auto;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {{ page_header(
+        title='Audit napló',
+        subtitle='Minden felhasználói tevékenység naplózása',
+        icon='journal-text',
+        back_url=url_for('auth.settings')
+    ) }}
+    
+    <!-- Szűrők -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="action" class="form-label">Művelet típus</label>
+                    <select class="form-select" id="action" name="action">
+                        <option value="">Összes művelet</option>
+                        {% for a in actions %}
+                        <option value="{{ a.action }}" {% if action_filter == a.action %}selected{% endif %}>
+                            {{ a.action }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="table" class="form-label">Érintett tábla</label>
+                    <select class="form-select" id="table" name="table">
+                        <option value="">Összes tábla</option>
+                        {% for t in tables %}
+                        <option value="{{ t.table_name }}" {% if table_filter == t.table_name %}selected{% endif %}>
+                            {{ t.table_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel me-1"></i>Szűrés
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <a href="{{ url_for('dashboard.audit_log') }}" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-x-circle me-1"></i>Törlés
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Statisztika -->
+    <div class="alert alert-info mb-4">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-info-circle me-2"></i>
+            <span>Összesen <strong>{{ total }}</strong> bejegyzés 
+                {% if action_filter or table_filter %}a szűrési feltételek alapján{% endif %}</span>
+        </div>
+    </div>
+    
+    <!-- Napló lista -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 140px;">Időpont</th>
+                        <th style="width: 100px;">Művelet</th>
+                        <th style="width: 100px;">Tábla</th>
+                        <th style="width: 80px;">Rekord ID</th>
+                        <th>Változások</th>
+                        <th style="width: 120px;">IP cím</th>
+                        <th style="width: 80px;">User</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>
+                            <small>{{ local_time(log.created_at, 'datetime') }}</small>
+                        </td>
+                        <td>
+                            {% set action_class = {
+                                'LOGIN_SUCCESS': 'bg-success',
+                                'LOGIN_FAILED': 'bg-danger',
+                                'LOGOUT': 'bg-secondary',
+                                'SOFT_DELETE': 'bg-warning text-dark',
+                                'DELETE': 'bg-danger',
+                                'CREATE': 'bg-primary',
+                                'UPDATE': 'bg-info',
+                                'PASSWORD_CHANGE': 'bg-warning text-dark'
+                            }.get(log.action, 'bg-secondary') %}
+                            <span class="badge {{ action_class }} log-action">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                        <td>
+                            <code>{{ log.table_name }}</code>
+                        </td>
+                        <td class="text-center">
+                            {% if log.record_id %}
+                            <span class="badge bg-light text-dark">#{{ log.record_id }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="log-details">
+                            {% if log.old_values %}
+                            <details>
+                                <summary class="text-muted small">Régi értékek</summary>
+                                <pre class="json-display">{{ log.old_values }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if log.new_values %}
+                            <details>
+                                <summary class="text-muted small">Új értékek</summary>
+                                <pre class="json-display">{{ log.new_values }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if not log.old_values and not log.new_values %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.ip_address %}
+                            <span class="log-ip">{{ log.ip_address }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.user_id %}
+                            <span class="badge bg-secondary">{{ log.user_id }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    {{ empty_state('Nincs naplóbejegyzés', 7) }}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Lapozás -->
+        {% if total_pages > 1 %}
+        <div class="card-footer bg-white">
+            <nav aria-label="Lapozás">
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page - 1 }}&action={{ action_filter }}&table={{ table_filter }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ p }}</span>
+                        </li>
+                        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ p }}&action={{ action_filter }}&table={{ table_filter }}">{{ p }}</a>
+                        </li>
+                        {% elif p == page - 3 or p == page + 3 %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page + 1 }}&action={{ action_filter }}&table={{ table_filter }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

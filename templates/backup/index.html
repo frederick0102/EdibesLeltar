@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/components.html" import page_header %}
+{% from "macros/components.html" import page_header, local_time %}
 
 {% block title %}Backup - Edibes Leltár{% endblock %}
 
@@ -78,6 +78,35 @@
                     </form>
                 </div>
             </div>
+            
+            <!-- Export / Import -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Import / Export</h6>
+                </div>
+                <div class="card-body">
+                    <!-- Export gomb -->
+                    <a href="{{ url_for('backup.export_current') }}" class="btn btn-success w-100 mb-3">
+                        <i class="bi bi-box-arrow-up me-1"></i>Adatbázis exportálása
+                    </a>
+                    
+                    <hr>
+                    
+                    <!-- Import form -->
+                    <form method="POST" action="{{ url_for('backup.upload_backup') }}" enctype="multipart/form-data">
+                        <label class="form-label"><i class="bi bi-box-arrow-in-down me-1"></i>Mentés importálása</label>
+                        <div class="input-group mb-2">
+                            <input type="file" class="form-control" name="backup_file" accept=".db" required>
+                            <button type="submit" class="btn btn-outline-success">
+                                <i class="bi bi-upload"></i> Feltöltés
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Csak .db kiterjesztésű SQLite fájl tölthető fel.
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
         
         <!-- Helyi backup-ok -->
@@ -104,7 +133,7 @@
                                     <code>{{ backup.filename }}</code>
                                 </td>
                                 <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
-                                <td><small>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                <td><small>{{ local_time(backup.created, 'datetime') }}</small></td>
                                 <td class="text-end">
                                     <a href="{{ url_for('backup.download_backup', filename=backup.filename) }}" 
                                        class="btn btn-sm btn-outline-primary" title="Letöltés">
@@ -209,7 +238,7 @@
                                     <code>{{ backup.filename }}</code>
                                 </td>
                                 <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
-                                <td><small>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                <td><small>{{ local_time(backup.created, 'datetime') }}</small></td>
                             </tr>
                             {% endfor %}
                         </tbody>

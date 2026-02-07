@@ -175,15 +175,47 @@
                             {{ "%.0f"|format(item.min_stock_level) }}
                         </td>
                         <td class="text-end">
-                            <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}" 
-                                   class="btn btn-outline-primary" title="Mozgás rögzítés">
-                                    <i class="bi bi-plus-minus"></i>
-                                </a>
-                                <button class="btn btn-outline-primary" data-bs-toggle="modal" 
-                                        data-bs-target="#detailModal{{ item.id }}" title="Részletek">
-                                    <i class="bi bi-eye"></i>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" 
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-lightning-charge me-1"></i>Gyors művelet
                                 </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><h6 class="dropdown-header">Készletmozgás</h6></li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}&type=STOCK_IN">
+                                            <i class="bi bi-box-arrow-in-down text-success me-2"></i>Bevételezés
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}&type=STOCK_OUT">
+                                            <i class="bi bi-box-arrow-up text-danger me-2"></i>Kivételezés
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}&type=ADJUSTMENT">
+                                            <i class="bi bi-sliders text-warning me-2"></i>Korrekció
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('inventory.add_movement') }}?product={{ item.id }}&type=LOSS">
+                                            <i class="bi bi-trash text-secondary me-2"></i>Selejt
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header">Áthelyezés</h6></li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('transfer.quick_transfer') }}?product={{ item.id }}">
+                                            <i class="bi bi-arrow-left-right text-info me-2"></i>Helyszínek között
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('inventory.movement_history') }}?product={{ item.id }}">
+                                            <i class="bi bi-clock-history text-muted me-2"></i>Mozgás történet
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
                         </td>
                     </tr>

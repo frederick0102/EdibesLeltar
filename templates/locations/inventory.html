@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/components.html" import page_header, movement_badge, empty_state %}
+{% from "macros/components.html" import page_header, movement_badge, empty_state, local_time %}
 
 {% block title %}{{ location.name }} készlet - Edibes Leltár{% endblock %}
 
@@ -121,7 +121,7 @@
                                 {% endif %}
                             </div>
                             <small class="text-muted">
-                                {{ mov.created_at.strftime('%m.%d %H:%M') if mov.created_at else '' }}
+                                {{ local_time(mov.created_at, 'short') }}
                             </small>
                         </div>
                     </li>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/components.html" import stat_card, movement_badge, product_name, quantity_change, empty_state %}
+{% from "macros/components.html" import stat_card, movement_badge, product_name, quantity_change, empty_state, local_time %}
 
 {% block title %}Főoldal - Edibes Leltár{% endblock %}
 
@@ -233,7 +233,7 @@
                                 {% for move in recent_movements %}
                                 <tr>
                                     <td>
-                                        <small>{{ move.created_at|default('-', true) }}</small>
+                                        <small>{{ local_time(move.created_at, 'short') }}</small>
                                     </td>
                                     <td>
                                         {{ product_name(move.product_name, move.package_size, move.unit) }}

@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models import User
-from app.database import get_db_connection
+from app.database import get_db_connection, log_audit
 from app import login_manager
 
 auth_bp = Blueprint('auth', __name__)
@@ -46,11 +46,17 @@ def login():
         if verify_password(password):
             user = User('admin')
             login_user(user, remember=True)
+            
+            # Sikeres bejelentkezés naplózása
+            log_audit('auth', None, 'LOGIN_SUCCESS', None, {'user': 'admin'})
+            
             flash('Sikeres bejelentkezés!', 'success')
             
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard.index'))
         else:
+            # Sikertelen bejelentkezés naplózása
+            log_audit('auth', None, 'LOGIN_FAILED', None, {'reason': 'invalid_password'})
             flash('Hibás jelszó!', 'danger')
     
     return render_template('login.html')
@@ -60,6 +66,9 @@ def login():
 @login_required
 def logout():
     """Kijelentkezés"""
+    # Kijelentkezés naplózása
+    log_audit('auth', None, 'LOGOUT', None, {'user': current_user.id if current_user else 'unknown'})
+    
     logout_user()
     flash('Sikeres kijelentkezés!', 'info')
     return redirect(url_for('auth.login'))
@@ -106,6 +115,9 @@ def settings():
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?)', 
                        ('app_password', password_hash))
         db.commit()
+        
+        # Jelszóváltás naplózása
+        log_audit('settings', None, 'PASSWORD_CHANGE', None, {'setting': 'app_password'})
         
         flash('Jelszó sikeresen módosítva!', 'success')
         return redirect(url_for('auth.settings'))

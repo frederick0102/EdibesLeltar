@@ -1,7 +1,7 @@
 """
 Dashboard (főoldal) route-ok
 """
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request
 from flask_login import login_required
 from app.database import get_db_connection
 from app.models import LocationType
@@ -143,3 +143,56 @@ def index():
                          low_stock_products=low_stock_products,
                          recent_movements=recent_movements,
                          LocationType=LocationType)
+
+
+@dashboard_bp.route('/audit-log')
+@login_required
+def audit_log():
+    """Audit napló megtekintése"""
+    db = get_db_connection()
+    
+    # Szűrési paraméterek
+    action_filter = request.args.get('action', '')
+    table_filter = request.args.get('table', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
+    # Alap lekérdezés
+    query = '''
+        SELECT * FROM audit_log
+        WHERE 1=1
+    '''
+    params = []
+    
+    if action_filter:
+        query += ' AND action = ?'
+        params.append(action_filter)
+    
+    if table_filter:
+        query += ' AND table_name = ?'
+        params.append(table_filter)
+    
+    # Összesítés
+    count_query = query.replace('SELECT *', 'SELECT COUNT(*) as cnt')
+    total = db.execute(count_query, params).fetchone()['cnt']
+    
+    # Lapozás
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    params.extend([per_page, (page - 1) * per_page])
+    
+    logs = db.execute(query, params).fetchall()
+    
+    # Egyedi akciók és táblák a szűrőhöz
+    actions = db.execute('SELECT DISTINCT action FROM audit_log ORDER BY action').fetchall()
+    tables = db.execute('SELECT DISTINCT table_name FROM audit_log ORDER BY table_name').fetchall()
+    
+    return render_template('audit_log.html',
+                         logs=logs,
+                         actions=actions,
+                         tables=tables,
+                         action_filter=action_filter,
+                         table_filter=table_filter,
+                         page=page,
+                         per_page=per_page,
+                         total=total,
+                         total_pages=(total + per_page - 1) // per_page)
