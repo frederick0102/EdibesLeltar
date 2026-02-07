@@ -136,7 +136,7 @@
                                 <label for="location_id" class="form-label">
                                     <i class="bi bi-geo-alt me-1"></i>Helyszín <span class="text-danger">*</span>
                                 </label>
-                                <select class="form-select form-select-lg border-warning" id="location_id" name="location_id" required>
+                                <select class="form-select form-select-lg border-danger" id="location_id" name="location_id" required>
                                     {% for location in locations %}
                                     <option value="{{ location.id }}" 
                                             data-type="{{ location.location_type }}"
@@ -146,7 +146,7 @@
                                     </option>
                                     {% endfor %}
                                 </select>
-                                <div class="form-text text-warning">
+                                <div class="form-text text-danger">
                                     <i class="bi bi-exclamation-triangle me-1"></i>
                                     <strong>Ellenőrizze a helyszínt!</strong> Melyik helyszínen történik a mozgás?
                                 </div>
