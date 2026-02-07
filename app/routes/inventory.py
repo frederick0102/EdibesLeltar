@@ -52,6 +52,68 @@ def debug_stock():
     return jsonify(result)
 
 
+@inventory_bp.route('/fix-duplicates')
+@login_required
+def fix_duplicates():
+    """
+    FIX: Központi Raktár készlet nullázása, Autó #1 marad.
+    """
+    db = get_db_connection()
+    
+    # Raktár helyszín ID
+    warehouse = db.execute('''
+        SELECT id FROM locations WHERE location_type = 'WAREHOUSE' LIMIT 1
+    ''').fetchone()
+    
+    if not warehouse:
+        return jsonify({'success': False, 'message': 'Nincs raktár helyszín!'})
+    
+    warehouse_id = warehouse['id']
+    
+    # Raktár készlet nullázása
+    result = db.execute('''
+        UPDATE location_inventory SET quantity = 0, last_updated = ?
+        WHERE location_id = ?
+    ''', (datetime.now(), warehouse_id))
+    
+    fixed_count = result.rowcount
+    
+    db.commit()
+    
+    return jsonify({
+        'success': True,
+        'fixed_count': fixed_count,
+        'message': f'Központi Raktár készlete nullázva ({fixed_count} termék). Autó #1 készlet változatlan.'
+    })
+
+
+@inventory_bp.route('/reset-all-stock')
+@login_required
+def reset_all_stock():
+    """
+    RESET: Minden készlet törlése.
+    Használat: /inventory/reset-all-stock?confirm=yes
+    """
+    db = get_db_connection()
+    
+    confirm = request.args.get('confirm')
+    if confirm != 'yes':
+        return jsonify({
+            'success': False,
+            'message': 'Add hozzá a ?confirm=yes paramétert a végrehajtáshoz!'
+        })
+    
+    # Készlet nullázása
+    db.execute('UPDATE location_inventory SET quantity = 0')
+    db.execute('UPDATE inventory SET quantity = 0')
+    db.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Minden készlet nullázva!'
+    })
+
+
 @inventory_bp.route('/')
 @login_required
 def list_inventory():
