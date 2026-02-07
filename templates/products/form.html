@@ -63,11 +63,24 @@
                                 <label for="barcode" class="form-label">
                                     <i class="bi bi-upc me-1"></i>Vonalkód
                                 </label>
-                                <input type="text" class="form-control" 
-                                       id="barcode" name="barcode"
-                                       value="{{ product.barcode if product else '' }}"
-                                       placeholder="Vonalkód (opcionális)">
-                                <div class="form-text">Későbbi vonalkód olvasáshoz</div>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" 
+                                           id="barcode" name="barcode"
+                                           value="{{ product.barcode if product else '' }}"
+                                           placeholder="Vonalkód (opcionális)">
+                                    <button type="button" class="btn btn-outline-primary" id="scanBarcodeBtn" onclick="toggleBarcodeScanner()">
+                                        <i class="bi bi-camera"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">Kézi beírás vagy kamera gombbal olvasás</div>
+                                
+                                <!-- Kamera előnézet -->
+                                <div id="barcodeScannerContainer" class="mt-2 d-none">
+                                    <div id="barcodeReader" style="width: 100%; border-radius: 8px; overflow: hidden;"></div>
+                                    <button type="button" class="btn btn-secondary btn-sm w-100 mt-2" onclick="stopBarcodeScanner()">
+                                        <i class="bi bi-x-lg me-1"></i>Kamera leállítása
+                                    </button>
+                                </div>
                             </div>
                             
                             <!-- Kiszerelés / Mennyiség -->
@@ -148,4 +161,83 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Barcode Scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='js/barcode-scanner.js') }}"></script>
+<script>
+let barcodeScanner = null;
+
+function toggleBarcodeScanner() {
+    const container = document.getElementById('barcodeScannerContainer');
+    if (container.classList.contains('d-none')) {
+        startBarcodeScanner();
+    } else {
+        stopBarcodeScanner();
+    }
+}
+
+async function startBarcodeScanner() {
+    const container = document.getElementById('barcodeScannerContainer');
+    const btn = document.getElementById('scanBarcodeBtn');
+    
+    if (!BarcodeScanner.isSupported()) {
+        alert('A kamera nem támogatott ezen az eszközön.');
+        return;
+    }
+    
+    container.classList.remove('d-none');
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-outline-primary');
+    
+    try {
+        barcodeScanner = new BarcodeScanner('barcodeReader', (barcode, format) => {
+            console.log('Vonalkód beolvasva:', barcode, format);
+            document.getElementById('barcode').value = barcode;
+            
+            // Vizuális visszajelzés
+            const input = document.getElementById('barcode');
+            input.classList.add('is-valid');
+            setTimeout(() => input.classList.remove('is-valid'), 2000);
+            
+            // Kamera leállítása sikeres olvasás után
+            stopBarcodeScanner();
+        }, {
+            fps: 15,
+            qrbox: { width: 250, height: 120 }
+        });
+        
+        await barcodeScanner.start();
+    } catch (err) {
+        console.error('Kamera hiba:', err);
+        alert('Nem sikerült a kamerát elindítani.\n' + (err.message || ''));
+        container.classList.add('d-none');
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+    }
+}
+
+async function stopBarcodeScanner() {
+    const container = document.getElementById('barcodeScannerContainer');
+    const btn = document.getElementById('scanBarcodeBtn');
+    
+    if (barcodeScanner) {
+        try {
+            await barcodeScanner.stop();
+        } catch (err) {
+            console.error('Kamera leállítási hiba:', err);
+        }
+        barcodeScanner = null;
+    }
+    
+    container.classList.add('d-none');
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-outline-primary');
+}
+
+// Oldal elhagyásakor kamera leállítása
+window.addEventListener('beforeunload', stopBarcodeScanner);
+</script>
 {% endblock %}
