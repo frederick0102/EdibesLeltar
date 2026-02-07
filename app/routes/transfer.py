@@ -573,8 +573,10 @@ def car_consumption():
             
             # Összkészlet frissítése az inventory táblában (kompatibilitás)
             total_qty = db.execute('''
-                SELECT COALESCE(SUM(quantity), 0) as total 
-                FROM location_inventory WHERE product_id = ?
+                SELECT COALESCE(SUM(li.quantity), 0) as total 
+                FROM location_inventory li
+                JOIN locations l ON li.location_id = l.id
+                WHERE li.product_id = ? AND l.is_deleted = 0
             ''', (product_id,)).fetchone()['total']
             
             existing_inv = db.execute('SELECT id FROM inventory WHERE product_id = ?', (product_id,)).fetchone()

@@ -34,19 +34,19 @@ def list_inventory():
             END, name
     ''').fetchall()
     
-    # Össz készlet lekérdezése (location_inventory táblából)
+    # Össz készlet lekérdezése (location_inventory táblából - csak aktív helyszínekről)
     query = '''
         SELECT 
             p.id, p.name, p.barcode, p.package_size, p.min_stock_level,
             c.name as category_name,
             u.abbreviation as unit_abbr,
-            COALESCE(SUM(li.quantity), 0) as current_quantity,
+            COALESCE(SUM(CASE WHEN l.is_deleted = 0 THEN li.quantity ELSE 0 END), 0) as current_quantity,
             MAX(li.last_updated) as last_updated
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         LEFT JOIN units u ON p.unit_id = u.id
         LEFT JOIN location_inventory li ON p.id = li.product_id
-        LEFT JOIN locations l ON li.location_id = l.id AND l.is_deleted = 0
+        LEFT JOIN locations l ON li.location_id = l.id
         WHERE p.is_deleted = 0
     '''
     params = []
@@ -217,8 +217,10 @@ def add_movement():
             
             # Összkészlet frissítése az inventory táblában (kompatibilitás)
             total_qty = db.execute('''
-                SELECT COALESCE(SUM(quantity), 0) as total 
-                FROM location_inventory WHERE product_id = ?
+                SELECT COALESCE(SUM(li.quantity), 0) as total 
+                FROM location_inventory li
+                JOIN locations l ON li.location_id = l.id
+                WHERE li.product_id = ? AND l.is_deleted = 0
             ''', (product_id,)).fetchone()['total']
             
             existing_inv = db.execute('SELECT id FROM inventory WHERE product_id = ?', (product_id,)).fetchone()
@@ -262,9 +264,12 @@ def add_movement():
     for p in products_base:
         product_data = dict(p)
         
-        # Össz készlet
+        # Össz készlet (csak aktív helyszínekről)
         total_qty = db.execute('''
-            SELECT COALESCE(SUM(quantity), 0) as total FROM location_inventory WHERE product_id = ?
+            SELECT COALESCE(SUM(li.quantity), 0) as total 
+            FROM location_inventory li
+            JOIN locations l ON li.location_id = l.id
+            WHERE li.product_id = ? AND l.is_deleted = 0
         ''', (p['id'],)).fetchone()['total']
         product_data['current_quantity'] = total_qty
         
@@ -605,8 +610,10 @@ def undo_movement(movement_id):
         
         # Összkészlet frissítése az inventory táblában (kompatibilitás)
         total_qty = db.execute('''
-            SELECT COALESCE(SUM(quantity), 0) as total 
-            FROM location_inventory WHERE product_id = ?
+            SELECT COALESCE(SUM(li.quantity), 0) as total 
+            FROM location_inventory li
+            JOIN locations l ON li.location_id = l.id
+            WHERE li.product_id = ? AND l.is_deleted = 0
         ''', (product_id,)).fetchone()['total']
         
         existing_inv = db.execute('SELECT * FROM inventory WHERE product_id = ?', (product_id,)).fetchone()

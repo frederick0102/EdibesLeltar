@@ -2,20 +2,47 @@
 Konfiguráció a leltárkezelő alkalmazáshoz
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Budapest időzóna (UTC+1, nyári időszámítás: UTC+2)
+BUDAPEST_TZ = timezone(timedelta(hours=1))  # CET (téli)
+
+def get_budapest_time():
+    """Visszaadja a jelenlegi budapesti időt"""
+    utc_now = datetime.now(timezone.utc)
+    # Egyszerű DST logika: március utolsó vasárnap - október utolsó vasárnap
+    month = utc_now.month
+    if 3 < month < 10:
+        # Nyári időszámítás (CEST = UTC+2)
+        return utc_now + timedelta(hours=2)
+    elif month == 3:
+        # Március: utolsó vasárnap után CEST
+        last_sunday = 31 - ((5 + 31) % 7)  # Utolsó vasárnap napja
+        if utc_now.day >= last_sunday:
+            return utc_now + timedelta(hours=2)
+        return utc_now + timedelta(hours=1)
+    elif month == 10:
+        # Október: utolsó vasárnap előtt CEST
+        last_sunday = 31 - ((5 + 31 + (utc_now.year % 400)) % 7)
+        if utc_now.day < last_sunday:
+            return utc_now + timedelta(hours=2)
+        return utc_now + timedelta(hours=1)
+    else:
+        # Téli időszámítás (CET = UTC+1)
+        return utc_now + timedelta(hours=1)
+
 # Verzió generálása: yyyymmdd-hhmmss formátumban
 def get_version():
-    """Visszaadja a verziószámot a build időpontja alapján"""
+    """Visszaadja a verziószámot a build időpontja alapján (budapesti idő)"""
     # Ha van VERSION fájl, olvassuk ki onnan
     version_file = os.path.join(BASE_DIR, 'VERSION')
     if os.path.exists(version_file):
         with open(version_file, 'r') as f:
             return f.read().strip()
-    # Egyébként a jelenlegi időpont
-    return datetime.now().strftime('%Y%m%d-%H%M%S')
+    # Egyébként a jelenlegi budapesti időpont
+    return get_budapest_time().strftime('%Y%m%d-%H%M%S')
 
 class Config:
     # Alap beállítások

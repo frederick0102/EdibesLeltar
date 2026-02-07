@@ -18,7 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Alkalmazás másolása
 COPY . .
 
-# Verzió fájl generálása (yyyymmdd-hhmmss formátum)
+# Időzóna beállítása Budapest-re és verzió fájl generálása
+ENV TZ=Europe/Budapest
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN date +%Y%m%d-%H%M%S > VERSION
 
 # Data és backup könyvtárak létrehozása
