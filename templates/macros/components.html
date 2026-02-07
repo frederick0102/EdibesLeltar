@@ -175,9 +175,18 @@
 
 {# Helyi időzóna megjelenítés - JavaScript konvertálja a kliens időzónájára #}
 {# format: 'datetime' (YYYY.MM.DD HH:MM), 'date' (YYYY.MM.DD), 'time' (HH:MM), 'short' (MM.DD HH:MM) #}
+{# dt lehet datetime objektum vagy string #}
 {% macro local_time(dt, format='datetime') %}
 {% if dt %}
+{% if dt is string %}
+{# String formátum - közvetlenül használjuk #}
+{% set utc_str = dt.replace(' ', 'T') ~ 'Z' if 'T' not in dt else dt ~ 'Z' %}
+{% set display_str = dt[:16].replace('-', '.').replace('T', ' ') if dt|length >= 16 else dt %}
+<span class="local-time" data-utc="{{ utc_str }}" data-format="{{ format }}">{{ display_str }}</span>
+{% else %}
+{# Datetime objektum #}
 <span class="local-time" data-utc="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z" data-format="{{ format }}">{{ dt.strftime('%Y.%m.%d %H:%M') }}</span>
+{% endif %}
 {% else %}
 -
 {% endif %}

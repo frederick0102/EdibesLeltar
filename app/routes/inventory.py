@@ -57,6 +57,7 @@ def debug_stock():
 def fix_duplicates():
     """
     FIX: Központi Raktár készlet nullázása, Autó #1 marad.
+    Egyúttal megjelöli hogy a migráció kész, hogy ne fusson újra.
     """
     db = get_db_connection()
     
@@ -78,12 +79,16 @@ def fix_duplicates():
     
     fixed_count = result.rowcount
     
+    # Migráció késznek jelölése - többé nem fog duplikálni
+    db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', 
+               ('inventory_migration_done', 'true'))
+    
     db.commit()
     
     return jsonify({
         'success': True,
         'fixed_count': fixed_count,
-        'message': f'Központi Raktár készlete nullázva ({fixed_count} termék). Autó #1 készlet változatlan.'
+        'message': f'Központi Raktár készlete nullázva ({fixed_count} termék). Migráció kikapcsolva.'
     })
 
 

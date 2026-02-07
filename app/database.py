@@ -269,7 +269,18 @@ def _insert_default_locations(db):
 
 
 def _migrate_existing_inventory(db):
-    """Meglévő készlet migrálása az alapértelmezett raktárba"""
+    """
+    Meglévő készlet migrálása az alapértelmezett raktárba
+    EGYSZER FUTÓ MIGRÁCIÓ - ellenőrzi hogy már lefutott-e
+    """
+    
+    # Ellenőrizzük, hogy a migráció már lefutott-e
+    migration_done = db.execute('''
+        SELECT value FROM settings WHERE key = 'inventory_migration_done'
+    ''').fetchone()
+    
+    if migration_done:
+        return  # Már lefutott, ne csináljunk semmit
     
     # Alapértelmezett raktár ID lekérdezése
     warehouse = db.execute('''
@@ -284,6 +295,14 @@ def _migrate_existing_inventory(db):
     # Meglévő készlet a régi inventory táblából
     old_inventory = db.execute('SELECT product_id, quantity FROM inventory').fetchall()
     
+    if not old_inventory:
+        # Nincs mit migrálni, jelöljük késznek
+        db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', 
+                   ('inventory_migration_done', 'true'))
+        db.commit()
+        return
+    
+    migrated_count = 0
     for item in old_inventory:
         # Ellenőrizzük, hogy már migrálva van-e
         existing = db.execute('''
@@ -296,6 +315,7 @@ def _migrate_existing_inventory(db):
                 INSERT INTO location_inventory (product_id, location_id, quantity)
                 VALUES (?, ?, ?)
             ''', (item['product_id'], warehouse_id, item['quantity']))
+            migrated_count += 1
     
     # Régi mozgásokhoz is beállítjuk a helyszínt
     db.execute('''
@@ -304,7 +324,13 @@ def _migrate_existing_inventory(db):
         WHERE location_id IS NULL
     ''', (warehouse_id,))
     
+    # Jelöljük a migrációt késznek - többé nem fut le
+    db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', 
+               ('inventory_migration_done', 'true'))
+    
     db.commit()
+    
+    print(f"[MIGRÁCIÓ] Régi inventory migrálva: {migrated_count} termék a Központi Raktárba")
 
 
 def _insert_default_data(db):
