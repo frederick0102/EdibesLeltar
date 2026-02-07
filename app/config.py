@@ -2,9 +2,20 @@
 Konfiguráció a leltárkezelő alkalmazáshoz
 """
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Verzió generálása: yyyymmdd-hhmmss formátumban
+def get_version():
+    """Visszaadja a verziószámot a build időpontja alapján"""
+    # Ha van VERSION fájl, olvassuk ki onnan
+    version_file = os.path.join(BASE_DIR, 'VERSION')
+    if os.path.exists(version_file):
+        with open(version_file, 'r') as f:
+            return f.read().strip()
+    # Egyébként a jelenlegi időpont
+    return datetime.now().strftime('%Y%m%d-%H%M%S')
 
 class Config:
     # Alap beállítások
@@ -24,7 +35,7 @@ class Config:
     
     # Alkalmazás beállítások
     APP_NAME = 'Edibes Leltár'
-    APP_VERSION = '1.0.0'
+    APP_VERSION = get_version()
     
     # Egyszerű jelszó (production-ben változtasd meg!)
     APP_PASSWORD = os.environ.get('APP_PASSWORD') or 'leltar2024'

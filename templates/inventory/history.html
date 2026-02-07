@@ -96,6 +96,7 @@
                         <th class="text-center">Előtte</th>
                         <th class="text-center">Utána</th>
                         <th>Megjegyzés</th>
+                        <th class="text-center">Művelet</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -143,9 +144,22 @@
                         <td>
                             <small class="text-muted">{{ move.note or '-' }}</small>
                         </td>
+                        <td class="text-center">
+                            {% if move.movement_type != 'REVERSAL' %}
+                            <form action="{{ url_for('inventory.undo_movement', movement_id=move.id) }}" 
+                                  method="POST" style="display: inline;" 
+                                  onsubmit="return confirm('Biztosan visszavonja ezt a mozgást?\n\n#{{ move.id }} - {{ move.product_name }}\nMennyiség: {{ move.quantity_change }}');">
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Visszavonás">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted" title="Visszavonás nem vonható vissza">-</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% else %}
-                    {{ empty_state('Nincs készletmozgás', 8, 'inbox') }}
+                    {{ empty_state('Nincs készletmozgás', 9, 'inbox') }}
                     {% endfor %}
                 </tbody>
             </table>

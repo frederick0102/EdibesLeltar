@@ -108,7 +108,7 @@
             <!-- Mozgás form -->
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4">
-                    <form method="POST">
+                    <form method="POST" id="movementForm" onsubmit="return confirmSubmit(event)">
                         <div class="row g-3">
                             <!-- Helyszín kiválasztása - FONTOS -->
                             <div class="col-12">
@@ -155,6 +155,15 @@
                             <!-- Készlet információ megjelenítése -->
                             <div class="col-12" id="stockInfoPanel" style="display: none;">
                                 <div class="alert alert-info mb-0">
+                                    <!-- Kiválasztott helyszínen - KIEMELT -->
+                                    <div class="p-2 mb-2 bg-white rounded border border-primary" id="selectedLocationStock">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span><i class="bi bi-geo-alt-fill text-primary me-1"></i><strong>Kiválasztott helyszínen:</strong></span>
+                                            <span class="fs-4 fw-bold text-primary" id="currentLocationQty">0</span>
+                                            <span class="text-muted">db</span>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span><strong>Össz készlet:</strong></span>
                                         <span class="fs-5 fw-bold" id="totalStockDisplay">0</span>
@@ -162,10 +171,6 @@
                                     <hr class="my-2">
                                     <div class="location-stock-info" id="locationStockDisplay">
                                         <!-- Helyszínenkénti bontás JS-ből töltődik -->
-                                    </div>
-                                    <div class="mt-2 pt-2 border-top" id="selectedLocationStock">
-                                        <strong><i class="bi bi-geo-alt"></i> Kiválasztott helyszínen:</strong>
-                                        <span class="fs-5 fw-bold ms-2" id="currentLocationQty">0</span> db
                                     </div>
                                 </div>
                             </div>
@@ -175,11 +180,14 @@
                                 <label for="movement_type" class="form-label">
                                     Mozgás típusa <span class="text-danger">*</span>
                                 </label>
-                                <select class="form-select" id="movement_type" name="movement_type" required>
+                                <select class="form-select" id="movement_type" name="movement_type" required onchange="updateQuantityField()">
                                     {% for type_code, type_name in movement_types %}
                                     <option value="{{ type_code }}">{{ type_name }}</option>
                                     {% endfor %}
                                 </select>
+                                <div id="adjustmentHint" class="form-text d-none text-info">
+                                    <i class="bi bi-info-circle me-1"></i>Korrekcióhoz használjon negatív számot csökkentéshez (pl. -5)
+                                </div>
                             </div>
                             
                             <!-- Mennyiség -->
@@ -193,11 +201,12 @@
                                     </button>
                                     <input type="number" class="form-control text-center" 
                                            id="quantity" name="quantity" 
-                                           value="1" min="1" step="1" required>
+                                           value="1" step="1" required>
                                     <button type="button" class="btn btn-outline-secondary" onclick="adjustQuantity(1)">
                                         <i class="bi bi-plus"></i>
                                     </button>
                                 </div>
+                                <div id="quantityHelp" class="form-text"></div>
                             </div>
                             
                             <!-- Gyors mennyiség gombok -->
@@ -246,6 +255,57 @@
 let barcodeScanner = null;
 let isScanning = false;
 let productLocationData = {};
+
+// Korrekció mód kezelése - mennyiség mező frissítése
+function updateQuantityField() {
+    const movementType = document.getElementById('movement_type').value;
+    const quantityInput = document.getElementById('quantity');
+    const adjustmentHint = document.getElementById('adjustmentHint');
+    const quantityHelp = document.getElementById('quantityHelp');
+    
+    if (movementType === 'ADJUSTMENT') {
+        // Korrekcióhoz negatív is lehet
+        quantityInput.removeAttribute('min');
+        adjustmentHint.classList.remove('d-none');
+        quantityHelp.innerHTML = '<i class="bi bi-lightbulb me-1"></i>Pozitív = hozzáadás, Negatív = kivonás';
+    } else {
+        // Többi típushoz min 1
+        quantityInput.setAttribute('min', '1');
+        if (parseFloat(quantityInput.value) < 1) {
+            quantityInput.value = 1;
+        }
+        adjustmentHint.classList.add('d-none');
+        quantityHelp.innerHTML = '';
+    }
+}
+
+// Megerősítő kérdés beküldés előtt
+function confirmSubmit(event) {
+    const productSelect = document.getElementById('product_id');
+    const locationSelect = document.getElementById('location_id');
+    const movementTypeSelect = document.getElementById('movement_type');
+    const quantity = document.getElementById('quantity').value;
+    
+    if (!productSelect.value || !locationSelect.value) {
+        return true; // Hagyja a validációt a böngészőre
+    }
+    
+    const productName = productSelect.options[productSelect.selectedIndex].text.split(' - Össz:')[0];
+    const locationName = locationSelect.options[locationSelect.selectedIndex].text;
+    const movementTypeName = movementTypeSelect.options[movementTypeSelect.selectedIndex].text;
+    
+    const message = `Biztosan rögzíti a mozgást?\n\n` +
+                    `📦 Termék: ${productName}\n` +
+                    `📍 Helyszín: ${locationName}\n` +
+                    `🔄 Típus: ${movementTypeName}\n` +
+                    `📊 Mennyiség: ${quantity}`;
+    
+    if (!confirm(message)) {
+        event.preventDefault();
+        return false;
+    }
+    return true;
+}
 
 // Helyszínenkénti készlet megjelenítése
 function updateStockDisplay() {
@@ -308,8 +368,15 @@ document.getElementById('location_id').addEventListener('change', updateStockDis
 // Mennyiség módosítása
 function adjustQuantity(delta) {
     const input = document.getElementById('quantity');
+    const movementType = document.getElementById('movement_type').value;
     let value = parseFloat(input.value) || 0;
-    value = Math.max(0, value + delta);
+    value = value + delta;
+    
+    // Nem-korrekciónál minimum 0
+    if (movementType !== 'ADJUSTMENT') {
+        value = Math.max(0, value);
+    }
+    
     input.value = value;
 }
 
@@ -422,6 +489,9 @@ document.getElementById('stopScannerBtn').addEventListener('click', stopScanner)
 if (document.getElementById('product_id').value) {
     updateStockDisplay();
 }
+
+// Kezdeti mozgástípus ellenőrzése
+updateQuantityField();
 
 // Oldal elhagyásakor kamera leállítása
 window.addEventListener('beforeunload', stopScanner);

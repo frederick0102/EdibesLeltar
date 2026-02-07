@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Alkalmazás másolása
 COPY . .
 
+# Verzió fájl generálása (yyyymmdd-hhmmss formátum)
+RUN date +%Y%m%d-%H%M%S > VERSION
+
 # Data és backup könyvtárak létrehozása
 RUN mkdir -p /app/data /app/backups
 

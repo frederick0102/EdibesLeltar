@@ -159,8 +159,17 @@ def add_movement():
         location_id = request.form.get('location_id') or default_location_id
         note = request.form.get('note', '').strip() or None
         
-        if not product_id or not movement_type or quantity <= 0:
-            flash('Minden mező kitöltése kötelező és a mennyiségnek pozitívnak kell lennie!', 'danger')
+        # Korrekciónál a mennyiség lehet negatív is
+        if movement_type == 'ADJUSTMENT':
+            if quantity == 0:
+                flash('A korrekció mennyisége nem lehet 0!', 'danger')
+                return redirect(url_for('inventory.add_movement'))
+        elif quantity <= 0:
+            flash('A mennyiségnek pozitívnak kell lennie!', 'danger')
+            return redirect(url_for('inventory.add_movement'))
+        
+        if not product_id or not movement_type:
+            flash('Termék és mozgás típus kiválasztása kötelező!', 'danger')
             return redirect(url_for('inventory.add_movement'))
         
         if not location_id:
@@ -178,6 +187,9 @@ def add_movement():
         # Mennyiség számítása a mozgás típusa alapján
         if movement_type in ['STOCK_OUT', 'LOSS']:
             quantity_change = -quantity
+        elif movement_type == 'ADJUSTMENT':
+            # Korrekciónal a quantity lehet pozitív vagy negatív
+            quantity_change = quantity
         else:
             quantity_change = quantity
         
@@ -531,3 +543,96 @@ def set_quantity(product_id):
         flash(f'Hiba történt: {str(e)}', 'danger')
     
     return redirect(url_for('inventory.list_inventory'))
+
+
+@inventory_bp.route('/undo-movement/<int:movement_id>', methods=['POST'])
+@login_required
+def undo_movement(movement_id):
+    """Készletmozgás visszavonása (ellentétes mozgás létrehozása)"""
+    db = get_db_connection()
+    
+    # Eredeti mozgás lekérdezése
+    movement = db.execute('''
+        SELECT im.*, p.name as product_name, l.name as location_name
+        FROM inventory_movements im
+        LEFT JOIN products p ON im.product_id = p.id
+        LEFT JOIN locations l ON im.location_id = l.id
+        WHERE im.id = ?
+    ''', (movement_id,)).fetchone()
+    
+    if not movement:
+        flash('A mozgás nem található!', 'danger')
+        return redirect(url_for('inventory.movement_history'))
+    
+    # Már visszavont mozgás ellenőrzése
+    if movement['movement_type'] == 'REVERSAL':
+        flash('Visszavonás nem vonható vissza!', 'warning')
+        return redirect(url_for('inventory.movement_history'))
+    
+    product_id = movement['product_id']
+    location_id = movement['location_id']
+    original_change = movement['quantity_change']
+    
+    # Aktuális készlet a helyszínen
+    current = db.execute('''
+        SELECT quantity FROM location_inventory 
+        WHERE product_id = ? AND location_id = ?
+    ''', (product_id, location_id)).fetchone()
+    
+    current_quantity = current['quantity'] if current else 0
+    
+    # Visszavonás = ellentétes irányú változás
+    reversal_change = -original_change
+    new_quantity = current_quantity + reversal_change
+    
+    if new_quantity < 0:
+        flash(f'Nem vonható vissza: a készlet negatívba menne ({new_quantity})!', 'danger')
+        return redirect(url_for('inventory.movement_history'))
+    
+    try:
+        # Helyszín-specifikus készlet frissítése
+        if current:
+            db.execute('''
+                UPDATE location_inventory 
+                SET quantity = ?, last_updated = ? 
+                WHERE product_id = ? AND location_id = ?
+            ''', (new_quantity, datetime.now(), product_id, location_id))
+        else:
+            db.execute('''
+                INSERT INTO location_inventory (product_id, location_id, quantity)
+                VALUES (?, ?, ?)
+            ''', (product_id, location_id, new_quantity))
+        
+        # Összkészlet frissítése az inventory táblában (kompatibilitás)
+        total_qty = db.execute('''
+            SELECT COALESCE(SUM(quantity), 0) as total 
+            FROM location_inventory WHERE product_id = ?
+        ''', (product_id,)).fetchone()['total']
+        
+        existing_inv = db.execute('SELECT * FROM inventory WHERE product_id = ?', (product_id,)).fetchone()
+        if existing_inv:
+            db.execute('UPDATE inventory SET quantity = ?, last_updated = ? WHERE product_id = ?',
+                      (total_qty, datetime.now(), product_id))
+        else:
+            db.execute('INSERT INTO inventory (product_id, quantity) VALUES (?, ?)', 
+                      (product_id, total_qty))
+        
+        # Visszavonás mozgás rögzítése
+        original_type = movement['movement_type']
+        db.execute('''
+            INSERT INTO inventory_movements 
+            (product_id, movement_type, quantity_change, quantity_before, quantity_after, location_id, note)
+            VALUES (?, 'REVERSAL', ?, ?, ?, ?, ?)
+        ''', (product_id, reversal_change, current_quantity, new_quantity, location_id,
+              f'Visszavonás: #{movement_id} ({original_type})'))
+        
+        db.commit()
+        
+        flash(f'Mozgás #{movement_id} sikeresen visszavonva! ({movement["product_name"]})', 'success')
+        log_audit(db, 'undo_movement', f'movement_id={movement_id}, product={product_id}')
+        
+    except Exception as e:
+        db.rollback()
+        flash(f'Hiba történt a visszavonás során: {str(e)}', 'danger')
+    
+    return redirect(url_for('inventory.movement_history'))
