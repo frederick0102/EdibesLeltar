@@ -10,6 +10,48 @@ from datetime import datetime, timedelta
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
 
+@inventory_bp.route('/debug-stock')
+@login_required
+def debug_stock():
+    """DEBUG: Készlet adatok ellenőrzése"""
+    db = get_db_connection()
+    
+    # Összes location_inventory rekord
+    location_inv = db.execute('''
+        SELECT li.id, li.product_id, p.name as product_name, 
+               li.location_id, l.name as location_name, l.is_deleted as loc_deleted,
+               li.quantity
+        FROM location_inventory li
+        JOIN products p ON li.product_id = p.id
+        JOIN locations l ON li.location_id = l.id
+        ORDER BY p.name, l.name
+    ''').fetchall()
+    
+    # Összesítés termékenként
+    summary = db.execute('''
+        SELECT p.id, p.name,
+               (SELECT COUNT(*) FROM location_inventory li2 WHERE li2.product_id = p.id) as loc_inv_count,
+               (SELECT SUM(li2.quantity) FROM location_inventory li2 WHERE li2.product_id = p.id) as total_all,
+               (SELECT SUM(li2.quantity) FROM location_inventory li2 
+                JOIN locations l2 ON li2.location_id = l2.id 
+                WHERE li2.product_id = p.id AND l2.is_deleted = 0) as total_active
+        FROM products p
+        WHERE p.is_deleted = 0
+        ORDER BY p.name
+    ''').fetchall()
+    
+    # Helyszínek
+    locations = db.execute('SELECT id, name, is_deleted, is_active FROM locations ORDER BY name').fetchall()
+    
+    result = {
+        'location_inventory': [dict(row) for row in location_inv],
+        'summary': [dict(row) for row in summary],
+        'locations': [dict(row) for row in locations]
+    }
+    
+    return jsonify(result)
+
+
 @inventory_bp.route('/')
 @login_required
 def list_inventory():
