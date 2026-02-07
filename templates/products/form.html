@@ -66,7 +66,7 @@
                                 <div class="input-group">
                                     <input type="text" class="form-control" 
                                            id="barcode" name="barcode"
-                                           value="{{ product.barcode if product else '' }}"
+                                           value="{{ product.barcode if product and product.barcode else '' }}"
                                            placeholder="Vonalkód (opcionális)">
                                     <button type="button" class="btn btn-outline-primary" id="scanBarcodeBtn" onclick="toggleBarcodeScanner()">
                                         <i class="bi bi-camera"></i>
@@ -90,7 +90,7 @@
                                 </label>
                                 <input type="text" class="form-control" 
                                        id="package_size" name="package_size"
-                                       value="{{ product.package_size if product else '' }}"
+                                       value="{{ product.package_size if product and product.package_size else '' }}"
                                        placeholder="Pl. 30, 50">
                                 <div class="form-text">Termék mennyisége/mérete</div>
                             </div>
@@ -122,7 +122,7 @@
                             <div class="col-12">
                                 <label for="description" class="form-label">Leírás</label>
                                 <textarea class="form-control" id="description" name="description"
-                                          rows="3" placeholder="Rövid leírás a termékről...">{{ product.description if product else '' }}</textarea>
+                                          rows="3" placeholder="Rövid leírás a termékről...">{{ product.description if product and product.description else '' }}</textarea>
                             </div>
                         </div>
                         
