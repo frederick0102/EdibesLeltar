@@ -133,7 +133,7 @@
                                     <code>{{ backup.filename }}</code>
                                 </td>
                                 <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
-                                <td><small>{{ local_time(backup.created, 'datetime') }}</small></td>
+                                <td><small>{{ local_time(backup.created, 'datetime', is_local=true) }}</small></td>
                                 <td class="text-end">
                                     <a href="{{ url_for('backup.download_backup', filename=backup.filename) }}" 
                                        class="btn btn-sm btn-outline-primary" title="Letöltés">
@@ -238,7 +238,7 @@
                                     <code>{{ backup.filename }}</code>
                                 </td>
                                 <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
-                                <td><small>{{ local_time(backup.created, 'datetime') }}</small></td>
+                                <td><small>{{ local_time(backup.created, 'datetime', is_local=true) }}</small></td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -176,11 +176,18 @@
 {# Helyi időzóna megjelenítés - JavaScript konvertálja a kliens időzónájára #}
 {# format: 'datetime' (YYYY.MM.DD HH:MM), 'date' (YYYY.MM.DD), 'time' (HH:MM), 'short' (MM.DD HH:MM) #}
 {# dt lehet datetime objektum vagy string #}
-{% macro local_time(dt, format='datetime') %}
+{# is_local: ha True, akkor az időbélyeg már helyi időben van (pl. fájl módosítási idő) #}
+{% macro local_time(dt, format='datetime', is_local=false) %}
 {% if dt %}
 {% if dt.strftime is defined %}
 {# Datetime objektum #}
+{% if is_local %}
+{# Helyi idő - nem kell konverzió, közvetlenül megjelenítjük #}
+<span>{{ dt.strftime('%Y.%m.%d %H:%M') }}</span>
+{% else %}
+{# UTC idő - JavaScript konvertálja #}
 <span class="local-time" data-utc="{{ dt.strftime('%Y-%m-%dT%H:%M:%S') }}Z" data-format="{{ format }}">{{ dt.strftime('%Y.%m.%d %H:%M') }}</span>
+{% endif %}
 {% else %}
 {# String formátum - közvetlenül használjuk #}
 {% set dt_str = dt|string %}
